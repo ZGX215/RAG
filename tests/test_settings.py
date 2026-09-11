@@ -52,6 +52,17 @@ class TestPlaceholderDetection:
         # 非 sk- 前缀的 key（部分厂商如此）长度足够即视为有效
         assert is_placeholder_llm_key("a" * 50) is False
 
+    def test_llm_key_with_whitespace_or_equals_is_invalid(self):
+        """格式明显非法的值（含空白或 '='）必须判为无效。
+
+        回归背景（真实验证时发现）：本机环境变量 deepseek_api_key 的值其实是
+        " LLM_API_KEY = sk-…"（一整行赋值语句被粘进了变量值）。原先它会被判为
+        "有效" → 配置校验假通过 → 调用时 401 → DeepSeekClient 吞掉异常返回空串，
+        表现为"服务看起来正常，但每个答案都是空的"。
+        """
+        assert is_placeholder_llm_key(" LLM_API_KEY = sk-" + "a" * 32) is True
+        assert is_placeholder_llm_key("sk-abcdefgh ijklmnopqrstuvwxyz") is True
+
     def test_auth_secret_blank_or_dev_default_is_placeholder(self):
         assert is_placeholder_auth_secret("") is True
         assert is_placeholder_auth_secret(None) is True
@@ -113,7 +124,10 @@ class TestPortableDefaults:
 
 
 class TestLLMKeyFallback:
-    """LLM key 的显式回退（替代旧实现里改写 os.environ 的暗逻辑）。"""
+    """LLM key 的显式回退（替代旧实现里改写 os.environ 的暗逻辑）。
+
+    回退以"厂商配置组"为单位：key + base_url + model 同进同出，避免跨厂商 401。
+    """
 
     def test_falls_back_to_declared_env_var(self, monkeypatch):
         """LLM_API_KEY 为占位符时，回退到显式声明的环境变量名。
@@ -136,23 +150,36 @@ class TestLLMKeyFallback:
 
         assert s.api_key == "e" * 50
 
-    def test_fallback_does_not_switch_vendor_config(self, monkeypatch):
-        """回退只换 key，不得顺带改写 base_url / model（旧实现的副作用之一）。"""
+    def test_fallback_aligns_vendor_triple(self, monkeypatch):
+        """回退必须把 key + base_url + model **一起**对齐到同一厂商。
+
+        回归背景（真实验证时踩到的线上级问题）：.env 残留火山方舟的 base_url 与
+        ep- 占位 model，而真实 key 是 DeepSeek 的。只换 key 不换 endpoint 会得到
+        401 "The API key format is incorrect"，而 DeepSeekClient.generate() 会吞掉
+        异常返回空串 —— 表现为"服务看起来正常，但每个答案都是空的"。
+        """
         monkeypatch.setenv("DEEPSEEK_API_KEY", "c" * 50)
 
         s = LLMSettings(
             LLM_API_KEY="",
-            LLM_BASE_URL="https://api.volces.com/v1",
-            LLM_MODEL="ep-20240101",
+            LLM_BASE_URL="https://ark.cn-beijing.volces.com/api/v3",
+            LLM_MODEL="ep-20250101000000-xxxxx",
         )
 
         assert s.api_key == "c" * 50
-        assert s.base_url == "https://api.volces.com/v1"
-        assert s.model == "ep-20240101"
+        assert s.base_url == "https://api.deepseek.com"
+        assert s.model == "deepseek-chat"
 
-    def test_valid_key_is_kept(self, monkeypatch):
+    def test_valid_key_keeps_configured_vendor(self, monkeypatch):
+        """LLM_API_KEY 有效时，绝不覆盖用户配置的 base_url / model。"""
         monkeypatch.setenv("DEEPSEEK_API_KEY", "c" * 50)
 
-        s = LLMSettings(LLM_API_KEY="sk-" + "d" * 32)
+        s = LLMSettings(
+            LLM_API_KEY="sk-" + "d" * 32,
+            LLM_BASE_URL="https://ark.cn-beijing.volces.com/api/v3",
+            LLM_MODEL="ep-20250101000000-xxxxx",
+        )
 
         assert s.api_key == "sk-" + "d" * 32
+        assert s.base_url == "https://ark.cn-beijing.volces.com/api/v3"
+        assert s.model == "ep-20250101000000-xxxxx"

@@ -42,17 +42,31 @@ if _ENV_PATH.exists():
 # 开发默认密钥：只用于本地，生产必须替换——否则任何人都能伪造任意密级的 token
 DEV_AUTH_SECRET = "dev-only-secret-change-me-in-production"
 
-# LLM key 的备用环境变量名：**显式声明**的受支持来源，不再隐式改写 os.environ。
-# 背景：历史配置把真实 key 放在系统环境变量里，而 .env 中的 LLM_API_KEY 只是占位符。
-LLM_KEY_FALLBACK_ENV_VARS = ("DEEPSEEK_API_KEY", "deepseek_api_key")
+# LLM key 的备用来源：**整组**回退（key + base_url + model 必须同厂商）。
+#
+# 为什么必须整组切：.env 里可能残留别的厂商的 endpoint/model 占位符
+# （本项目就是如此：base_url 指向火山方舟 ark.cn-beijing.volces.com，
+#   model 是 ep-xxxx 占位符，而真实 key 是 DeepSeek 的）。
+# 只换 key 不换 endpoint 会得到 401 "The API key format is incorrect"，
+# 而 DeepSeekClient.generate() 会吞掉异常返回空串 —— 表现为"服务正常但答案全空"。
+# 因此回退时三者一并对齐，并在日志里说明覆盖了什么。
+LLM_FALLBACK_PROFILES: tuple[tuple[str, dict[str, str]], ...] = (
+    ("DEEPSEEK_API_KEY", {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"}),
+    ("deepseek_api_key", {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"}),
+)
 
 
 def is_placeholder_llm_key(value: str | None) -> bool:
-    """判断 LLM key 是否为空或明显是占位符。"""
+    """判断 LLM key 是否为空、明显是占位符、或**格式明显非法**。"""
     v = (value or "").strip()
     if not v:
         return True
     if "xxxx" in v.lower():
+        return True
+    # key 里不可能出现空白或 '='。出现它们通常意味着"把 NAME=value 整行粘进了变量"
+    # 这类配置事故 —— 例如本机 deepseek_api_key 的值其实是 " LLM_API_KEY = sk-..."，
+    # 必须判为无效，否则配置校验会假通过，而调用时只得到 401 → 静默返回空答案。
+    if any(ch.isspace() for ch in v) or "=" in v:
         return True
     # 真实 key 通常 30+ 字符；sk- 开头但明显过短的视为占位符
     return v.startswith("sk-") and len(v) < 30
@@ -84,21 +98,31 @@ class LLMSettings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_api_key_fallback(self):
-        """LLM_API_KEY 为空/占位符时，回退到**显式声明的**环境变量名。
+        """LLM_API_KEY 为空/占位符时，按**整组厂商配置**回退。
 
-        与旧实现的区别：只回退 key 本身，不改 base_url / model、不写 os.environ，
-        因此"配置到底从哪来"始终可追溯（旧实现会在 import 期改写全局环境）。
+        与旧实现的差别：旧实现是在 import 期改写 os.environ（全局副作用、来源不可追溯）；
+        这里只改本实例的字段，并显式打日志说明覆盖了什么。
+        三者必须同厂商，原因见 LLM_FALLBACK_PROFILES 上方注释。
         """
-        if is_placeholder_llm_key(self.api_key):
-            for name in LLM_KEY_FALLBACK_ENV_VARS:
-                candidate = (os.environ.get(name) or "").strip()
-                if not is_placeholder_llm_key(candidate):
-                    _log.warning(
-                        "LLM_API_KEY 为空或为占位符，已回退使用环境变量 %s —— "
-                        "建议把真实 key 直接写进 .env 的 LLM_API_KEY", name
-                    )
-                    self.api_key = candidate
-                    break
+        if not is_placeholder_llm_key(self.api_key):
+            return self
+
+        for env_name, profile in LLM_FALLBACK_PROFILES:
+            candidate = (os.environ.get(env_name) or "").strip()
+            if is_placeholder_llm_key(candidate):
+                continue
+
+            _log.warning(
+                "LLM_API_KEY 为空或为占位符 → 回退使用环境变量 %s，"
+                "并将 base_url 由 %r 对齐为 %r、model 由 %r 对齐为 %r"
+                "（key 与 endpoint 必须同厂商，否则会 401）",
+                env_name, self.base_url, profile["base_url"], self.model, profile["model"],
+            )
+            self.api_key = candidate
+            self.base_url = profile["base_url"]
+            self.model = profile["model"]
+            break
+
         return self
 
 
