@@ -52,6 +52,14 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
+      - name: 安装 CJK 字体
+        # tests/conftest.py 需要渲染中文来生成测试 PDF。运行器默认不带 CJK 字体，
+        # 不装的话这 6 个中文 PDF 测试会被 skip —— 而中文文档解析正是本项目的核心
+        # 场景，在 CI 里跳过就形成了盲区，所以这里主动装上让它真正跑起来。
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+
       - name: 安装依赖
         # 为什么要先单独装 CPU 版 torch：
         #   Linux 上 PyPI 的 torch 默认是 CUDA 构建（wheel 529MB），并会额外拉

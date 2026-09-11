@@ -158,21 +158,47 @@ def sample_docx_no_headings():
     os.unlink(file_path)
 
 
+# 跨平台候选 CJK 字体：Windows 用微软雅黑，Linux 用 Noto CJK，macOS 用苹方。
+# 原先只写死了 Windows 路径，Linux CI 上会退化成 Helvetica，
+# 渲染中文直接抛 FPDFUnicodeEncodingException（首次 CI 才暴露的问题）。
+_CJK_FONT_CANDIDATES = (
+    "C:/Windows/Fonts/msyh.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+    "/System/Library/Fonts/PingFang.ttc",
+)
+
+
+def _find_cjk_font() -> str | None:
+    """查找可用的 CJK 字体，找不到返回 None。"""
+    for path in _CJK_FONT_CANDIDATES:
+        if os.path.exists(path):
+            return path
+    return None
+
+
 def _create_pdf(file_path: str, pages: list[str]):
-    """用 fpdf2 生成临时 PDF 文件。"""
+    """用 fpdf2 生成临时 PDF 文件。
+
+    含中文时必须有 CJK 字体。找不到就 skip 而不是 error —— 让"缺字体"这种
+    环境问题表现为"跳过"，而不是伪装成测试失败。
+    """
     from fpdf import FPDF
+
     pdf = FPDF()
     pdf.add_page()
-    # 用 Helvetica 处理拉丁文本，有中文则用系统字体
+
     has_chinese = any("\u4e00" <= c <= "\u9fff" for page_text in pages for c in page_text)
     if has_chinese:
-        # 用 Windows 系统自带微软雅黑字体
-        font_path = "C:/Windows/Fonts/msyh.ttc"
-        if os.path.exists(font_path):
-            pdf.add_font("CJK", "", font_path, uni=True)
-            pdf.set_font("CJK", size=12)
-        else:
-            pdf.set_font("Helvetica", size=12)
+        font_path = _find_cjk_font()
+        if not font_path:
+            pytest.skip(
+                "缺少 CJK 字体，无法生成中文测试 PDF"
+                "（Linux 可 apt install fonts-noto-cjk；Windows 自带微软雅黑）"
+            )
+        pdf.add_font("CJK", "", font_path)
+        pdf.set_font("CJK", size=12)
     else:
         pdf.set_font("Helvetica", size=12)
 
