@@ -15,8 +15,8 @@ PDF 检索能力自测脚本
 """
 
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
 
 # 确保项目根目录在 sys.path 中
@@ -77,9 +77,9 @@ def print_chunks(chunks):
 
 
 def test_pdf(pdf_path, questions, mode_name):
-    from app.ingest.pdf_reader import PdfReader
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.pdf_reader import PdfReader
 
     print_header(f"测试 {mode_name}")
 
@@ -91,13 +91,13 @@ def test_pdf(pdf_path, questions, mode_name):
     print_chunks(chunks)
 
     # 2. 初始化嵌入模型和索引
-    print(f"\n🔧 加载模型...")
+    print("\n🔧 加载模型...")
     embedder = SentenceEmbedder()
     print(f"   模型维度: {embedder.dimension}")
 
     # 3. 清理旧索引并重建
     repo = ChromaRepository(embedder)
-    print(f"   入库中...")
+    print("   入库中...")
     n = repo.upsert(chunks)
     print(f"   已入库: {n} 个分块")
 
@@ -128,7 +128,7 @@ def main():
     chroma_dir = project_root / "data" / "chroma_db"
     if chroma_dir.exists():
         shutil.rmtree(str(chroma_dir))
-        print(f"\n🧹 已清理旧索引")
+        print("\n🧹 已清理旧索引")
 
     total = 0
     passed = 0
@@ -140,7 +140,7 @@ def main():
         total += len(LEGAL_QUESTIONS)
     else:
         print(f"\n⚠️  法律文档未找到: {LEGAL_PDF}")
-        print(f"   请将 PDF 放在 data/ 目录下")
+        print("   请将 PDF 放在 data/ 目录下")
 
     # 测试普通文档
     if NORMAL_PDF.exists():
@@ -149,17 +149,17 @@ def main():
         total += len(NORMAL_QUESTIONS)
     else:
         print(f"\n⚠️  普通文档未找到: {NORMAL_PDF}")
-        print(f"   请先运行以下命令生成测试 PDF：")
-        print(f"   python scripts/gen_test_pdf.py")
+        print("   请先运行以下命令生成测试 PDF：")
+        print("   python scripts/gen_test_pdf.py")
 
     # 总览
     print_header("测试完成")
     if total > 0:
         print(f"  总命中: {passed}/{total} ({passed/total*100:.1f}%)")
-    print(f"\n💡 提示：")
-    print(f"  - 修改脚本顶部的 LEGAL_QUESTIONS / NORMAL_QUESTIONS 来换问题")
-    print(f"  - 修改 LEGAL_PDF / NORMAL_PDF 路径来测试自己的 PDF 文件")
-    print(f"  - 模型缓存位于 E 盘 data/models，首次测试自动加载无需联网")
+    print("\n💡 提示：")
+    print("  - 修改脚本顶部的 LEGAL_QUESTIONS / NORMAL_QUESTIONS 来换问题")
+    print("  - 修改 LEGAL_PDF / NORMAL_PDF 路径来测试自己的 PDF 文件")
+    print("  - 模型缓存位于 E 盘 data/models，首次测试自动加载无需联网")
 
 
 if __name__ == "__main__":

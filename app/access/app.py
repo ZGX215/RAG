@@ -15,15 +15,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config.settings import settings
 from app.access.middleware import (
+    ExceptionMiddleware,
     RequestIDMiddleware,
     SecurityMiddleware,
     TimingMiddleware,
-    ExceptionMiddleware,
 )
 from app.access.routes import router
 from app.cross.metrics import MetricsMiddleware, metrics_endpoint
+from config.settings import settings
 
 # 创建 FastAPI app
 app = FastAPI(
@@ -33,7 +33,8 @@ app = FastAPI(
 )
 
 # 初始化日志
-from app.cross.logging import setup_logging, get_logger
+from app.cross.logging import get_logger, setup_logging
+
 setup_logging(log_level=settings.general.log_level)
 logger = get_logger(__name__)
 

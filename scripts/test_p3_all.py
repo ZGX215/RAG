@@ -3,8 +3,9 @@
 测试前确保 FastAPI 已启动（python main.py）。
 """
 
-import time
 import sys
+import time
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 import requests
@@ -96,7 +97,7 @@ def test_normal_qa():
     data = r.json()
     answer = data['answer']
     sources = data.get('sources', [])
-    print(f"  问题: 公司主营业务是什么")
+    print("  问题: 公司主营业务是什么")
     print(f"  答案: {answer[:80]}...")
     print(f"  来源: {len(sources)} 条")
     assert len(answer) > 0, "答案为空"
@@ -116,7 +117,7 @@ def test_degrade_raw_snippet():
     )
     data = r.json()
     answer = data['answer']
-    print(f"  public 用户查询公司简介:")
+    print("  public 用户查询公司简介:")
     print(f"  答案长度: {len(answer)}")
     print(f"  答案前50字: {answer[:50]}...")
     assert len(answer) > 0, "降级答案为空"
@@ -135,9 +136,8 @@ def test_permission():
     )
     data = r.json()
     sources = data.get('sources', [])
-    levels = [s.get('heading_number', '') for s in sources]
     print(f"  public 用户的命中数: {len(sources)}")
-    print(f"  ✅ public 用户看不到 CONFIDENTIAL 数据")
+    print("  ✅ public 用户看不到 CONFIDENTIAL 数据")
 
 
 def test_trace_id():

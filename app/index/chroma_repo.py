@@ -13,14 +13,13 @@ import chromadb
 from chromadb import Collection
 
 from app.contracts import (
+    CLASSIFICATION_LEVELS,
     Chunk,
     ChunkMeta,
     ChunkType,
     ChunkTypeClassification,
-    CLASSIFICATION_LEVELS,
     Embedder,
     Hit,
-    IndexRepository,
     MetaFilter,
 )
 from app.cross.logging import get_logger

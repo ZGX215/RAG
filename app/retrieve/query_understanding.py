@@ -13,7 +13,6 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-
 # 中文数字 → 正则片段
 _CN_NUM = r"[一二三四五六七八九十百零]+"
 _CN_CLAUSE = re.compile(rf"第{_CN_NUM}条")

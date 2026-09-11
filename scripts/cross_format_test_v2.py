@@ -1,6 +1,10 @@
-﻿import os, sys, tempfile, shutil, hashlib
-from pathlib import Path
+﻿import os
+import shutil
+import sys
+import tempfile
 from collections import Counter, defaultdict
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def create_pdf(path):
@@ -136,8 +140,8 @@ def run_test():
     if chroma_dir.exists():
         shutil.rmtree(chroma_dir)
         print("  已清理旧数据")
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder=embedder)
 
@@ -157,8 +161,8 @@ def run_test():
         print(f"    {dn}: {cnt}")
 
     print("\n[4/5] 初始化检索器...")
-    from app.retrieve.query_understanding import QueryUnderstanding
     from app.retrieve.hybrid import HybridRetriever
+    from app.retrieve.query_understanding import QueryUnderstanding
     qu = QueryUnderstanding()
     retriever = HybridRetriever(repo=repo, embedder=embedder, query_understanding=qu)
 
@@ -252,7 +256,7 @@ def run_test():
     print(f"  API 问题命中 MD 来源: {api_hits if api_hits else '无'}")
 
     shutil.rmtree(tmp)
-    print(f"\n  临时文件已清理")
+    print("\n  临时文件已清理")
     print("=" * 70)
     return results
 

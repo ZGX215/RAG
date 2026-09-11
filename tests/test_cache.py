@@ -11,13 +11,13 @@ from __future__ import annotations
 import sys
 import time
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from app.cross.answer_cache import LRUCache, AnswerCache
+from app.cross.answer_cache import AnswerCache, LRUCache
 
 
 class TestLRUCache:

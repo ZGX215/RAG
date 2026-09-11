@@ -2,14 +2,17 @@
 创建三个不同密级的文档切片并写入 ChromaDB，然后执行权限查询测试。
 """
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 import uuid
 from pathlib import Path
 
 from app.contracts import (
-    Chunk, ChunkMeta, ChunkType, ChunkTypeClassification,
-    CLASSIFICATION_LEVELS, MetaFilter, Hit,
+    CLASSIFICATION_LEVELS,
+    ChunkTypeClassification,
+    Hit,
+    MetaFilter,
 )
 from app.index.chroma_repo import ChromaRepository
 from app.index.embedder import SentenceEmbedder

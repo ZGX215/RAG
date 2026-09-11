@@ -1,5 +1,6 @@
-import requests
 import json
+
+import requests
 
 BASE = 'http://localhost:8000'
 DATA_DIR = 'E:/trae/cede/mcu-rag-qa-v2/data/batch_test'

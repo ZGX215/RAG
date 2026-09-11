@@ -10,7 +10,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 import time
 
 from app.cross.cache import MultiLevelCache
-from app.index.embedder import FakeEmbedder, CachedEmbedder
+from app.index.embedder import CachedEmbedder, FakeEmbedder
 
 
 def test_cache_manager():
@@ -23,7 +23,7 @@ def test_cache_manager():
 
     # 写入
     cache.set("test", "hello", "world", ttl=60)
-    print(f"写入: namespace='test', key='hello', value='world'")
+    print("写入: namespace='test', key='hello', value='world'")
 
     # 读取
     val = cache.get("test", "hello")
@@ -63,7 +63,7 @@ def test_cached_embedder():
 
     # 确认结果一致
     assert vec1 == vec2, "缓存和计算结果应该一样"
-    print(f"结果一致: True")
+    print("结果一致: True")
     speedup = t1 / t2 if t2 > 0 else float("inf")
     print(f"加速比: {speedup:.0f}x")
 

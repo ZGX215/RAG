@@ -2,7 +2,8 @@
 详细测试 DOCX "人工智能+" 检索命中率，统计 Top-1/Top-3
 """
 
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -62,9 +63,9 @@ def check_hit(hit_heading: str, correct_keywords: str) -> tuple[bool, bool]:
 
 
 def test():
-    from app.ingest.word_reader import WordReader
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.word_reader import WordReader
     from app.retrieve.hybrid import HybridRetriever
     from app.retrieve.query_understanding import QueryUnderstanding
 
@@ -80,7 +81,7 @@ def test():
     # 1. 读取并分块
     reader = WordReader()
     chunks = reader.read(DOCX_FILE, doc_name="人工智能+行动意见")
-    print(f"\n 分块结果:")
+    print("\n 分块结果:")
     print(f"  总分块数: {len(chunks)}")
 
     for i, c in enumerate(chunks[:10]):  # 只显示前 10 个
@@ -93,7 +94,7 @@ def test():
         print(f"  ... 还有 {len(chunks) - 10} 个块")
 
     # 2. 嵌入 + 索引 + 混合检索
-    print(f"\n 加载模型 + 入库...")
+    print("\n 加载模型 + 入库...")
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder)
     n = repo.upsert(chunks)
@@ -101,7 +102,7 @@ def test():
     retriever = HybridRetriever(repo=repo, embedder=embedder, query_understanding=qu)
     print(f" 已入库: {n} 个分块")
     print(f" 模型维度: {embedder.dimension}")
-    print(f" 使用混合检索（稠密+稀疏，带降权）")
+    print(" 使用混合检索（稠密+稀疏，带降权）")
 
     # 3. 详细检索测试
     print(f"\n 详细检索测试 ({len(TEST_QUESTIONS)} 个问题):")
@@ -145,7 +146,7 @@ def test():
     top3_rate = top3_hits / total * 100
 
     print(f"\n{'='*70}")
-    print(f" 统计结果:")
+    print(" 统计结果:")
     print(f"    总问题数: {total}")
     print(f"    Top-1 命中: {top1_hits}/{total}  ({top1_rate:.1f}%)")
     print(f"    Top-3 命中: {top3_hits}/{total}  ({top3_rate:.1f}%)")

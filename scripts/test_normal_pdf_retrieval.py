@@ -1,7 +1,9 @@
 ﻿#!/usr/bin/env python
-import os, sys, shutil
-from pathlib import Path
+import shutil
+import sys
 from collections import Counter, defaultdict
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 TEST_PDF = "E:/trae/cede/mcu-rag-qa-v2/data/test_normal_pdf.pdf"
 TEST_QUESTIONS = [
@@ -61,8 +63,8 @@ def run_test():
     if chroma_dir.exists():
         shutil.rmtree(chroma_dir)
         print("  已清理旧数据")
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder=embedder)
     repo.upsert(chunks)
@@ -71,8 +73,8 @@ def run_test():
     for dn, cnt in Counter(c.meta.doc_name for c in all_chunks).most_common():
         print(f"    {dn}: {cnt}")
     print("\n[4/5] 初始化检索器...")
-    from app.retrieve.query_understanding import QueryUnderstanding
     from app.retrieve.hybrid import HybridRetriever
+    from app.retrieve.query_understanding import QueryUnderstanding
     qu = QueryUnderstanding()
     retriever = HybridRetriever(repo=repo, embedder=embedder, query_understanding=qu)
     print("\n" + "=" * 70)

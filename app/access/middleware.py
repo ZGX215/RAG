@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Callable, Optional
+from typing import Callable
 
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.contracts import ChunkTypeClassification, MetaFilter
-from app.cross.context import set_current_context, reset_context, RequestContext
+from app.cross.context import RequestContext, reset_context, set_current_context
 from app.cross.exceptions import BaseAppException
 from app.cross.logging import get_logger
 
@@ -85,6 +84,7 @@ class ExceptionMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Response],
     ) -> Response:
         from fastapi.responses import JSONResponse
+
         from app.cross.context import get_current_context
 
         try:
@@ -160,8 +160,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     ) -> Response:
         from fastapi.responses import JSONResponse
 
-        from app.cross.security import SecurityManager
         from app.auth.service import verify_token
+        from app.cross.security import SecurityManager
         from config.settings import settings
 
         path = request.url.path

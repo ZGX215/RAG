@@ -4,7 +4,8 @@
 输入 exit 退出。
 """
 
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -30,8 +31,8 @@ def _strip_heading(content: str, heading: str) -> str:
 
 
 def main():
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
 
     print("=" * 56)
     print("  RAG 交互式问答测试")

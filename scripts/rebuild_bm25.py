@@ -1,5 +1,6 @@
 """重新构建 BM25 索引（注入新数据后需要）。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from app.index.chroma_repo import ChromaRepository

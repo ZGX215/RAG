@@ -1,9 +1,9 @@
 """测试文件名解析密级功能。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from app.ingest.name_classifier import parse_classification_from_filename
-from app.contracts import ChunkTypeClassification
 
 test_cases = [
     # 合法文件名

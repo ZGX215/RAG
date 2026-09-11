@@ -20,7 +20,6 @@ if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
 from app.auth.service import (
-    TokenPayload,
     create_token,
     hash_password,
     new_salt,
@@ -137,9 +136,9 @@ class TestToken:
         )
         # 手动构造过期 token
         import base64
-        import json
-        import hmac
         import hashlib
+        import hmac
+        import json
 
         secret = "test-secret-key-12345"
         data = {

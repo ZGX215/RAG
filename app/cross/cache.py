@@ -11,13 +11,12 @@ from __future__ import annotations
 import hashlib
 import json
 import pickle
-from functools import lru_cache
 from typing import Any, Generic, Optional, TypeVar
 
 import redis
 
-from config.settings import settings
 from app.cross.logging import get_logger
+from config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -86,9 +85,7 @@ class MultiLevelCache:
         if len(self._l1) <= self._l1_max_size:
             return
 
-        # 先删过期的
-        import time
-        now = time.time()
+        # 先删过期的（is_expired 自己按当前时间判断，无需外部传入时间戳）
         expired_keys = [k for k, v in self._l1.items() if v.is_expired()]
         for k in expired_keys:
             del self._l1[k]

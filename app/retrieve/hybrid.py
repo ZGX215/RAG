@@ -16,7 +16,7 @@ from rank_bm25 import BM25Okapi
 
 from app.contracts import Chunk, Embedder, Hit, IndexRepository, MetaFilter, Reranker
 from app.cross.logging import get_logger
-from app.retrieve.query_understanding import QueryUnderstanding, QueryIntent
+from app.retrieve.query_understanding import QueryIntent, QueryUnderstanding
 
 logger = get_logger(__name__)
 

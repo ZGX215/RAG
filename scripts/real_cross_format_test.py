@@ -1,6 +1,10 @@
-﻿import os, sys, tempfile, shutil, hashlib
-from pathlib import Path
+﻿import os
+import shutil
+import sys
+import tempfile
 from collections import Counter
+from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 def create_pdf(path):
@@ -126,8 +130,8 @@ def run_test():
     if chroma_dir.exists():
         shutil.rmtree(chroma_dir)
         print("  已清理旧 ChromaDB")
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder=embedder)
     print(f"  Embedder: {embedder.dimension} 维")
@@ -151,8 +155,8 @@ def run_test():
         print(f"    {dn}: {cnt}")
 
     print("\n[4/5] 初始化检索器...")
-    from app.retrieve.query_understanding import QueryUnderstanding
     from app.retrieve.hybrid import HybridRetriever
+    from app.retrieve.query_understanding import QueryUnderstanding
     qu = QueryUnderstanding()
     retriever = HybridRetriever(repo=repo, embedder=embedder, query_understanding=qu)
     print("  检索器就绪")
@@ -179,7 +183,7 @@ def run_test():
         else:
             verdict = "FAIL"
             print(f"\n  [FAIL] 测试 {qi}: [{domain}] {q}")
-            print(f"    无检索结果")
+            print("    无检索结果")
 
         results.append({
             "qi": qi, "domain": domain, "question": q,
@@ -226,7 +230,7 @@ def run_test():
     print(f"  法律法规问题命中 PDF/DOCX 来源: {law_hits if law_hits else '无'}")
 
     shutil.rmtree(tmp)
-    print(f"\n  临时文件已清理")
+    print("\n  临时文件已清理")
     print("=" * 70)
     return results
 

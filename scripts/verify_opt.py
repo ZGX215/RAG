@@ -1,5 +1,7 @@
 """验证优化效果：缓存命中 + 冷启动 + 流式（使用 Session 连接池减少客户端开销）"""
-import requests, time as t
+import time as t
+
+import requests
 from requests.adapters import HTTPAdapter
 
 base = 'http://localhost:8000'
@@ -39,7 +41,8 @@ r = session.post(base + '/api/v1/qa', json={'question': '个人信息处理者�
 first_byte = (t.perf_counter() - s) * 1000
 tokens = 0
 for line in r.iter_lines(decode_unicode=True):
-    if not line: continue
+    if not line:
+        continue
     if line.startswith('data:') and 'DONE' not in line:
         tokens += 1
     elif 'DONE' in line:

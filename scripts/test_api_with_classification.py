@@ -1,9 +1,11 @@
 """演示新的入库 API：在提交任务时指定 classification。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
-import requests
 import time
+
+import requests
 
 BASE = "http://localhost:8000"
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 import contextvars
 from typing import Optional
 
-from app.contracts import RequestContext, MetaFilter
+from app.contracts import RequestContext
 
 # 全局 contextvar
 _request_ctx: contextvars.ContextVar[Optional[RequestContext]] = contextvars.ContextVar("request_ctx")

@@ -1,6 +1,7 @@
 """诊断检索质量：分析每个问题 Top-5 的匹配情况。"""
 
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -11,8 +12,8 @@ os.environ["HF_HUB_CACHE"] = str(project_root / "data" / "models")
 os.environ["HF_HUB_OFFLINE"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-from app.index.embedder import SentenceEmbedder
 from app.index.chroma_repo import ChromaRepository
+from app.index.embedder import SentenceEmbedder
 
 embedder = SentenceEmbedder()
 repo = ChromaRepository(embedder)
@@ -62,9 +63,9 @@ for q in queries:
     if correct_heading:
         rank = next((i+1 for i, h in enumerate(hits) if h.meta.heading_number == correct_heading), -1)
         if rank == 1:
-            print(f"  >> 结果: 正确，Top-1 命中")
+            print("  >> 结果: 正确，Top-1 命中")
         elif rank > 1:
             print(f"  >> 结果: 排在第 {rank} 位，但未进 Top-1")
         else:
-            print(f"  >> 结果: 未进入 Top-5")
+            print("  >> 结果: 未进入 Top-5")
         print()

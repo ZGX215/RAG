@@ -1,14 +1,11 @@
 """直接通过代码方式批量入库带分级的文档。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from app.contracts import ChunkTypeClassification
 from app.index.chroma_repo import ChromaRepository
 from app.index.embedder import SentenceEmbedder
-from app.ingest.txt_reader import TxtReader
-from app.ingest.word_reader import WordReader
-from app.ingest.markdown_reader import MarkdownReader
-from app.ingest.pdf_reader import PdfReader
 from app.ingest.reader_factory import get_reader_factory
 
 embedder = SentenceEmbedder()
@@ -47,13 +44,14 @@ for file_path, doc_name, classification_str in files:
     print(f"  成功入库: {count} chunks (classification={classification_str})")
     total += count
 
-print(f"\n=== 入库完成 ===")
+print("\n=== 入库完成 ===")
 print(f"总计: {total} chunks")
 print(f"数据库总数: {repo.count()}")
 
 # 验证密级分布
 all_chunks = repo.get_all_chunks()
 from collections import Counter
+
 counter = Counter()
 for c in all_chunks:
     counter[c.meta.classification.value] += 1

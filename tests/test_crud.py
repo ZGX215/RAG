@@ -27,8 +27,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db.database import Base
 from app.db import crud
+from app.db.database import Base
 
 
 @pytest.fixture

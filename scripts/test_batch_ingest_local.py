@@ -1,5 +1,6 @@
 """本地测试批量入库（不用 HTTP API，直接执行）。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from app.ingest.name_classifier import validate_batch_files

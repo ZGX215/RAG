@@ -1,13 +1,14 @@
 """直接批量入库（同步方式，不依赖 Celery），测试文件名解析功能。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from pathlib import Path
-from app.ingest.name_classifier import parse_classification_from_filename, validate_batch_files
-from app.ingest.reader_factory import get_reader_factory
-from app.index.chroma_repo import ChromaRepository
-from app.index.embedder import SentenceEmbedder, CachedEmbedder
 
+from app.index.chroma_repo import ChromaRepository
+from app.index.embedder import CachedEmbedder, SentenceEmbedder
+from app.ingest.name_classifier import validate_batch_files
+from app.ingest.reader_factory import get_reader_factory
 from config.settings import settings
 
 # 待批量入库的文件
@@ -70,13 +71,14 @@ for r in passed:
     total_upserted += count
     print(f"  写入数据库: {count} chunks (密级={r.classification.value})")
 
-print(f"\n=== 入库完成 ===")
+print("\n=== 入库完成 ===")
 print(f"总计: {total_upserted} chunks 写入数据库")
 
 # 第三步：验证密级分布
 print("\n=== Step 3: 验证密级分布 ===")
 all_chunks = repo.get_all_chunks()
 from collections import Counter
+
 counter = Counter()
 for c in all_chunks:
     counter[c.meta.classification.value] += 1

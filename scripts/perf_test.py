@@ -1,4 +1,8 @@
-import time, statistics, sys, requests
+import statistics
+import sys
+import time
+
+import requests
 
 BASE = 'http://localhost:8000'
 
@@ -58,7 +62,7 @@ if __name__ == '__main__':
     print(f'健康检查: {r.json()}')
     r2 = requests.get(f'{BASE}/metrics', timeout=5)
     print(f'Metrics: status={r2.status_code} 长度={len(r2.text)}B')
-    has_r = any('mcu_rag_requests_total' in l for l in r2.text.split('\n'))
+    has_r = any('mcu_rag_requests_total' in line for line in r2.text.split('\n'))
     print(f'指标正常: {has_r}')
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 50
     run(n)

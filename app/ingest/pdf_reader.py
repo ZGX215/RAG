@@ -143,7 +143,7 @@ class PdfReader(SourceReader):
                 continue
 
             # 按行分割
-            lines = [l.strip() for l in page_text.splitlines() if l.strip()]
+            lines = [line.strip() for line in page_text.splitlines() if line.strip()]
             if not lines:
                 continue
 

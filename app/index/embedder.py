@@ -14,7 +14,6 @@ from sentence_transformers import SentenceTransformer
 
 from app.contracts import Embedder
 from app.cross.logging import get_logger
-
 from app.cross.paths import get_project_root
 
 logger = get_logger(__name__)

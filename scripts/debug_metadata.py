@@ -1,5 +1,6 @@
 """调试：检查 ChromaDB 中所有 chunks 的元数据。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 import chromadb

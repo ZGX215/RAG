@@ -8,6 +8,7 @@
 """
 
 from pathlib import Path
+
 from fpdf import FPDF
 
 project_root = Path(__file__).resolve().parent.parent

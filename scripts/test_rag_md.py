@@ -9,7 +9,6 @@
 
 import os
 import sys
-import shutil
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -52,9 +51,9 @@ def print_header(text):
 
 
 def test():
-    from app.ingest.markdown_reader import MarkdownReader
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.markdown_reader import MarkdownReader
 
     print_header("RAG 学习模块 Markdown 检索测试")
     print(f"  文件: {MD_FILE}")
@@ -69,7 +68,7 @@ def test():
         print(f"  {i+1:>2}. [{heading}] {preview}...")
 
     # 2. 嵌入 + 索引
-    print(f"\n🔧 加载模型 + 入库...")
+    print("\n🔧 加载模型 + 入库...")
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder)
     n = repo.upsert(chunks)
@@ -91,7 +90,7 @@ def test():
 
     print(f"\n✅ 命中: {passed}/{len(TEST_QUESTIONS)} ({passed/len(TEST_QUESTIONS)*100:.1f}%)")
 
-    print(f"\n  💡 修改 TEST_QUESTIONS 列表即可换问题测试")
+    print("\n  💡 修改 TEST_QUESTIONS 列表即可换问题测试")
 
 
 if __name__ == "__main__":

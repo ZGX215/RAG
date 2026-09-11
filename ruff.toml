@@ -1,0 +1,33 @@
+# Ruff 静态检查配置（CI 门禁之一）
+#
+# 策略：先采用「低噪音、高价值」的规则集，保证 CI 从第一天就是绿的，
+# 之后再逐步 ratchet —— 每次解锁一类规则并修完，而不是一次开全上百条。
+# （ruff 0.16 的默认规则集比早期版本宽很多，直接跑会报 486 条，
+#   对本项目这类已有代码库属于一次性大改，不适合作为起步。）
+#
+# 当前启用：
+#   E4 / E7 / E9  import 与语法层面的错误
+#   F             pyflakes：未使用导入与变量、未定义名
+#                 —— 本次即靠 F821 抓到 app/access/routes.py 里 `Any` 未导入
+#   I             import 排序
+#
+# 暂不启用（附理由，避免以后有人以为是漏配）：
+#   UP       typing 现代化，约 184 处，纯风格，可单独一次性修
+#   BLE001   宽 except，约 45 处 —— 本项目为防御式 RAG 代码，是有意为之
+#   S / B008 FastAPI 的 Depends() 会被误报，开了要先加大量 noqa
+#   E501     行长，待格式化统一后再开
+
+line-length = 110
+target-version = "py311"
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[lint.per-file-ignores]
+# 脚本与测试需要在顶部插入 sys.path 后再导入，故允许 E402
+"scripts/**" = ["E402"]
+"tests/**" = ["E402"]
+# 下面两个是"引导入口"：必须先把项目根插入 sys.path，再导入 app 模块，
+# 否则直接 python main.py 会 ImportError。这是刻意设计，不是疏忽。
+"main.py" = ["E402"]
+"app/access/app.py" = ["E402"]

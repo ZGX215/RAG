@@ -22,9 +22,8 @@ os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
 
 def main():
-    from app.ingest.reader_factory import get_reader_factory
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
 
     print("=" * 55)
     print("  RAG 交互式问答终端")

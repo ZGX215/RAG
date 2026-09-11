@@ -12,7 +12,7 @@ from pathlib import Path
 from app.cross.celery_app import celery_app
 from app.cross.logging import get_logger
 from app.index.chroma_repo import ChromaRepository
-from app.index.embedder import SentenceEmbedder, CachedEmbedder
+from app.index.embedder import CachedEmbedder, SentenceEmbedder
 from app.ingest.reader_factory import get_reader_factory
 from config.settings import settings
 

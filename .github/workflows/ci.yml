@@ -1,0 +1,68 @@
+# ============================================================
+# CI · 持续集成
+#
+# 每次 push / 提 PR 时自动执行：静态检查 → 测试 → 覆盖率门禁。
+# 任一环节不过，这次提交就是红的，问题在合入前就被拦住，
+# 而不是等上线后才发现。
+#
+# 两个需要知道的点：
+#
+# 1) CI 环境【没有 .env】（它被 .gitignore 排除，也不该进仓库）。
+#    测试不需要真实密钥，所以这里显式声明 APP_ENV=development，
+#    让启动配置校验走"仅告警、不阻断"分支。
+#    绝不要把真实 key 写进本文件 —— workflow 是公开可见的。
+#
+# 2) 首次运行会偏慢：requirements.txt 含 sentence-transformers / chromadb
+#    等重依赖。之后有 pip 缓存会快很多。
+# ============================================================
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+# 同一分支连续推送时，取消上一次还在跑的流水线，省时间也省额度
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: 静态检查 + 测试
+    runs-on: ubuntu-latest
+
+    env:
+      APP_ENV: development
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          # 与 Dockerfile 的 python:3.11-slim 保持一致，避免"本地能跑 CI 挂"
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: 静态检查（ruff）
+        run: ruff check .
+
+      - name: 运行测试与覆盖率门禁
+        # 覆盖率地板：Windows 本机实测 59%，先设 55% 留出平台差异余量。
+        # 阶段 C 补完 index/generate/access 的测试后，应把这个数字往上抬（目标 70%+）。
+        # 门禁的作用不是"提高覆盖率"，而是防止已经拿到的覆盖率被悄悄改回去。
+        run: |
+          pytest tests/ -q \
+            --cov=app --cov=config \
+            --cov-report=term-missing \
+            --cov-fail-under=55

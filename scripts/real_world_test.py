@@ -10,12 +10,11 @@
   7. 长时间运行稳定性
 """
 
-import time
 import statistics
-import sys
-import requests
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict
+
+import requests
 
 BASE = 'http://localhost:8000'
 
@@ -63,7 +62,7 @@ def test_cold_start() -> dict:
     print(f"   答案长度: {len(data.get('answer', ''))}")
     print(f"   来源数: {len(data.get('sources', []))}")
     if ms > 10000:
-        print(f"   ⚠️ 冷启动超过 10s，加载模型耗时")
+        print("   ⚠️ 冷启动超过 10s，加载模型耗时")
     return {"ms": ms, "status": r.status_code}
 
 
@@ -115,7 +114,7 @@ def test_qa_latency() -> dict:
 
 def test_cache_hit(question: str = "公司主营业务是什么", clearance: str = "public") -> dict:
     """缓存命中测试。"""
-    print(f"\n=== 3. 缓存命中测试 ===")
+    print("\n=== 3. 缓存命中测试 ===")
     # 先确保缓存被写入
     for i in range(3):
         s = time.perf_counter()
@@ -302,7 +301,7 @@ def test_stability(n_requests: int = 30) -> dict:
     total_ms = (time.perf_counter() - start) * 1000
     s = sorted(latencies)
 
-    print(f"\n--- 稳定性统计 ---")
+    print("\n--- 稳定性统计 ---")
     print(f"   总请求: {n_requests} | 成功: {len(latencies) - errors} | 失败: {errors}")
     print(f"   总耗时: {total_ms:.0f}ms | QPS: {n_requests / (total_ms / 1000):.1f}")
     if latencies:
@@ -391,7 +390,7 @@ def main():
     print("=" * 60)
     print(f"  测试时间: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  测试用例: {len(QUESTIONS)} 个问题 × 多种场景")
-    print(f"  总请求数: 约 80+ 次")
+    print("  总请求数: 约 80+ 次")
     print("=" * 60)
 
 

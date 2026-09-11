@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from app.contracts import RequestContext, MetaFilter, ChunkTypeClassification
+from app.contracts import ChunkTypeClassification, MetaFilter
 from app.cross.context import get_current_context
 from app.cross.logging import get_logger
 

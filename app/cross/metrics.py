@@ -9,7 +9,7 @@ import time
 from typing import Callable
 
 from fastapi import Request, Response
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.cross.logging import get_logger

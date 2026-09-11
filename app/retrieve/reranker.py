@@ -14,7 +14,7 @@ Reranker — 基于 CrossEncoder 的重排序实现。
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from app.contracts import Hit, Reranker
 from app.cross.logging import get_logger

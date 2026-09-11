@@ -62,7 +62,7 @@ def test_api_permission(query: str, clearance: str, top_k: int = 5):
         print(f"  ❌ 失败: 发现越权文档 {unauthorized_found}")
         return False
     else:
-        print(f"  ✅ 通过: 所有返回文档均在用户权限范围内")
+        print("  ✅ 通过: 所有返回文档均在用户权限范围内")
         return True
 
 

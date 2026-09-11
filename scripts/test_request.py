@@ -1,6 +1,6 @@
 """测试 API 请求并打印完整响应。"""
+
 import requests
-import json
 
 BASE = "http://localhost:8000"
 

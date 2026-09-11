@@ -1,5 +1,6 @@
 """查看 DOCX 所有分块的标题和内容预览"""
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -10,6 +11,7 @@ docx_files = [f for f in os.listdir(str(DOCX_DIR)) if f.endswith('.docx') and '�
 DOCX_FILE = DOCX_DIR / docx_files[0] if docx_files else None
 
 from app.ingest.word_reader import WordReader
+
 reader = WordReader()
 chunks = reader.read(DOCX_FILE, doc_name="人工智能+行动意见")
 

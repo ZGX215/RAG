@@ -21,18 +21,21 @@ from config.settings import settings, validate_runtime_config
 validate_runtime_config()
 
 # 先在 main 线程初始化模型 + ChromaDB
-from app.access.app import init_repo, app
+from app.access.app import app, init_repo
+
 init_repo()
 
 # 初始化关系型数据库表
 from app.db.database import init_db
+
 init_db()
 
 # 预热：在后台线程中发送第一个请求，加载所有模型
 def _warmup():
-    import time
-    import requests
     import logging
+    import time
+
+    import requests
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     time.sleep(3)  # 等 uvicorn 启动
     try:
@@ -51,6 +54,7 @@ warmup_thread.start()
 
 # 再启动 uvicorn（host/port 统一由 config.settings 提供，不再写死）
 import uvicorn
+
 uvicorn.run(
     app,
     host=settings.api.host,

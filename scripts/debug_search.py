@@ -1,8 +1,9 @@
 """调试：直接测试 ChromaDB 搜索，验证 MetaFilter 正确性。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
-from app.contracts import MetaFilter, ChunkTypeClassification
+from app.contracts import ChunkTypeClassification, MetaFilter
 from app.index.chroma_repo import ChromaRepository
 from app.index.embedder import SentenceEmbedder
 

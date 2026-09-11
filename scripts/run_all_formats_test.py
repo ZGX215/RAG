@@ -18,8 +18,8 @@
 """
 
 import os
-import sys
 import shutil
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -249,9 +249,9 @@ def print_chunks(chunks):
 
 
 def test_format(file_path, format_name):
-    from app.ingest.reader_factory import get_reader_factory
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.reader_factory import get_reader_factory
 
     questions = TEST_QUESTIONS.get(format_name, [])
     if not questions:
@@ -269,7 +269,7 @@ def test_format(file_path, format_name):
     print_chunks(chunks)
 
     # 2. 嵌入模型 + 索引
-    print(f"\n  加载模型 + 入库...")
+    print("\n  加载模型 + 入库...")
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder)
     n = repo.upsert(chunks)
@@ -299,7 +299,7 @@ def main():
     print(f"  缓存: {DATA_DIR / 'models'}")
 
     # 1. 生成测试数据
-    print(f"\n📦 生成测试数据...")
+    print("\n📦 生成测试数据...")
     created = ensure_test_data()
     for c in created:
         print(f"  ✅ {c}")
@@ -308,7 +308,7 @@ def main():
     chroma_dir = DATA_DIR / "chroma_db"
     if chroma_dir.exists():
         shutil.rmtree(str(chroma_dir))
-        print(f"\n🧹 已清理旧索引")
+        print("\n🧹 已清理旧索引")
 
     # 3. 逐格式测试
     test_cases = [
@@ -333,11 +333,11 @@ def main():
     print_header("测试汇总")
     if all_total > 0:
         print(f"  总命中: {all_passed}/{all_total} ({all_passed/all_total*100:.1f}%)")
-    print(f"  格式覆盖: PDF | DOCX | MD | TXT")
-    print(f"\n💡  换自己的文件:")
-    print(f"     修改 test_cases 列表，把路径换成你的文件即可")
-    print(f"  换测试问题:")
-    print(f"     修改 TEST_QUESTIONS 字典，按格式分类添加")
+    print("  格式覆盖: PDF | DOCX | MD | TXT")
+    print("\n💡  换自己的文件:")
+    print("     修改 test_cases 列表，把路径换成你的文件即可")
+    print("  换测试问题:")
+    print("     修改 TEST_QUESTIONS 字典，按格式分类添加")
 
 
 if __name__ == "__main__":

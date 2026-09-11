@@ -1,11 +1,12 @@
-﻿import hashlib, json, os, sys, tempfile, shutil
+﻿import os
+import shutil
+import sys
+import tempfile
+from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-from collections import Counter, defaultdict
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.contracts import Chunk, ChunkMeta, ChunkType, ChunkTypeClassification, SourceReader
 
 # ============================
 # 1. Create test files
@@ -194,8 +195,8 @@ def main():
     if chroma_dir.exists():
         shutil.rmtree(chroma_dir)
         print("  已清理旧 ChromaDB")
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder=embedder)
     print(f"  Embedder: {embedder.dimension} 维")
@@ -219,8 +220,8 @@ def main():
 
     # 4. Init retriever
     print("\n[4/5] 初始化检索器...")
-    from app.retrieve.query_understanding import QueryUnderstanding
     from app.retrieve.hybrid import HybridRetriever
+    from app.retrieve.query_understanding import QueryUnderstanding
     qu = QueryUnderstanding()
     retriever = HybridRetriever(repo=repo, embedder=embedder, query_understanding=qu)
     print("  检索器就绪")
@@ -283,7 +284,7 @@ def main():
     if missing:
         print(f"\n  WARNING: 以下格式从未出现在 Top-5: {missing}")
     else:
-        print(f"\n  所有 4 种格式均出现在 Top-5 命中中")
+        print("\n  所有 4 种格式均出现在 Top-5 命中中")
 
     shutil.rmtree(tmp)
     print(f"\n  临时文件已清理: {tmp}")

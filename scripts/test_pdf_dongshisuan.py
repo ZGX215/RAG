@@ -5,7 +5,8 @@
 用法: python scripts/test_pdf_dongshisuan.py
 """
 
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -53,9 +54,9 @@ def print_header(text):
 
 
 def test():
-    from app.ingest.pdf_reader import PdfReader
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.pdf_reader import PdfReader
 
     print_header("PDF 检索测试：东数西算实施意见")
 
@@ -73,7 +74,7 @@ def test():
         print(f"  {i+1:>2}. [{page}] {heading:20s} | {preview}...")
 
     # 2. 嵌入 + 索引
-    print(f"\n 加载模型 + 入库...")
+    print("\n 加载模型 + 入库...")
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder)
     n = repo.upsert(chunks)

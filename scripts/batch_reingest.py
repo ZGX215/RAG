@@ -7,12 +7,12 @@ _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
+import logging
+
 from app.index.chroma_repo import ChromaRepository
 from app.index.embedder import SentenceEmbedder
-from app.ingest.txt_reader import TxtReader
 from config.settings import settings
 
-import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def main():
         _client.delete_collection(settings.index.collection_name)
         print(f"   已删除旧 collection: {settings.index.collection_name}")
     except Exception:
-        print(f"   旧 collection 不存在，跳过删除")
+        print("   旧 collection 不存在，跳过删除")
     repo = ChromaRepository(
         embedder=embedder,
         persist_dir=settings.index.persist_dir,
@@ -65,7 +65,6 @@ def main():
     print(f"   有效文件: {len(valid_files)} 个\n")
 
     # 逐文件读取、分块、入库
-    from app.contracts import Chunk
     all_chunks = 0
     for fname, classification, name in valid_files:
         file_path = os.path.join(batch_dir, fname)

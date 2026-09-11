@@ -7,7 +7,7 @@ P3 改造：POST /ingest 改为异步（Celery 后台处理），不阻塞问答
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, Request
@@ -16,13 +16,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.contracts import MetaFilter
+from app.cross.answer_cache import get_answer_cache
 from app.cross.celery_app import celery_app
 from app.cross.context import get_current_context
 from app.cross.logging import get_logger
-from app.cross.answer_cache import get_answer_cache
 from app.cross.metrics import metrics
-from app.db.database import get_db
 from app.db import crud
+from app.db.database import get_db
 from app.generate.prompt_injection_detector import PromptInjectionDetector
 from config.settings import settings
 
@@ -116,12 +116,7 @@ async def _qa_json(
     db: Session | None = None,
 ) -> QAResponse:
     """非流式问答：完整生成后返回 JSON。"""
-    from app.index.embedder import CachedEmbedder
-    from app.generate.llm_client import DeepSeekClient
     from app.generate.fallback_provider import FallbackProvider
-    from app.retrieve.hybrid import HybridRetriever
-    from app.retrieve.query_understanding import QueryUnderstanding
-    from app.access.app import _get_repo
 
     fallback_provider = FallbackProvider(rules_path=settings.generate.fallback_rules_path)
 
@@ -202,12 +197,8 @@ async def _qa_stream(
     clearance: str,
 ) -> StreamingResponse:
     """流式问答：SSE 逐 token 输出。"""
-    from app.index.embedder import CachedEmbedder
-    from app.generate.llm_client import DeepSeekClient
     from app.generate.fallback_provider import FallbackProvider
-    from app.retrieve.hybrid import HybridRetriever
-    from app.retrieve.query_understanding import QueryUnderstanding
-    from app.access.app import _get_repo
+    from app.generate.llm_client import DeepSeekClient
 
     fallback_provider = FallbackProvider(rules_path=settings.generate.fallback_rules_path)
 
@@ -305,10 +296,10 @@ async def _retrieve(
 
     P3 优化：retriever 全局单例，BM25 索引只构建一次，避免每次请求重建。
     """
+    from app.access.app import _get_repo
     from app.index.embedder import CachedEmbedder
     from app.retrieve.hybrid import HybridRetriever
     from app.retrieve.query_understanding import QueryUnderstanding
-    from app.access.app import _get_repo
 
     global _retriever_instance
     repo = _get_repo()
@@ -409,6 +400,7 @@ async def _llm_generate(
 async def dashboard():
     """返回测试面板 HTML 页面。"""
     from pathlib import Path
+
     from fastapi.responses import HTMLResponse
     html_path = Path(__file__).resolve().parent.parent.parent / "static" / "test_dashboard.html"
     if html_path.exists():
@@ -709,19 +701,19 @@ async def list_query_logs(
         "total": len(logs),
         "logs": [
             {
-                "id": l.id,
-                "trace_id": l.trace_id,
-                "question": l.question[:100],
-                "sources_count": l.sources_count,
-                "answer_preview": l.answer_preview[:200] if l.answer_preview else None,
-                "elapsed_ms": l.elapsed_ms,
-                "cache_hit": l.cache_hit,
-                "degraded": l.degraded,
-                "injection_blocked": l.injection_blocked,
-                "llm_used": l.llm_used,
-                "created_at": l.created_at.isoformat() if l.created_at else None,
+                "id": log.id,
+                "trace_id": log.trace_id,
+                "question": log.question[:100],
+                "sources_count": log.sources_count,
+                "answer_preview": log.answer_preview[:200] if log.answer_preview else None,
+                "elapsed_ms": log.elapsed_ms,
+                "cache_hit": log.cache_hit,
+                "degraded": log.degraded,
+                "injection_blocked": log.injection_blocked,
+                "llm_used": log.llm_used,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
             }
-            for l in logs
+            for log in logs
         ],
     }
 

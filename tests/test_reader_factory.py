@@ -74,8 +74,8 @@ class TestReaderFactory:
 
     def test_register_new_format(self):
         """注册新格式后应能正确返回。"""
-        from app.contracts import SourceReader
         from typing import List
+
         from app.contracts import Chunk
 
         class MockReader:

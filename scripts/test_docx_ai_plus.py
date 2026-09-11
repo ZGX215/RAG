@@ -5,7 +5,8 @@
 用法: python scripts/test_docx_ai_plus.py
 """
 
-import os, sys
+import os
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent
@@ -55,9 +56,9 @@ def print_header(text):
 
 
 def test():
-    from app.ingest.word_reader import WordReader
-    from app.index.embedder import SentenceEmbedder
     from app.index.chroma_repo import ChromaRepository
+    from app.index.embedder import SentenceEmbedder
+    from app.ingest.word_reader import WordReader
 
     print_header("DOCX 检索测试：人工智能+行动意见")
 
@@ -81,7 +82,7 @@ def test():
         print(f"  {i+1:>2}. {level_indent}[L{level}] {heading:30s} | {preview}...")
 
     # 2. 嵌入 + 索引
-    print(f"\n 加载模型 + 入库...")
+    print("\n 加载模型 + 入库...")
     embedder = SentenceEmbedder()
     repo = ChromaRepository(embedder)
     n = repo.upsert(chunks)

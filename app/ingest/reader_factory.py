@@ -5,7 +5,7 @@ P3 新增：统一入口，新增来源时只需要在 _SUPPORTED_EXTENSIONS 注
 
 from __future__ import annotations
 
-from typing import Dict, List, Type
+from typing import Dict, List
 
 from app.contracts import SourceReader
 from app.cross.logging import get_logger
@@ -32,10 +32,10 @@ class ReaderFactory:
 
     def _register_defaults(self) -> None:
         """注册内置支持的格式。"""
-        from app.ingest.pdf_reader import PdfReader
-        from app.ingest.word_reader import WordReader
         from app.ingest.markdown_reader import MarkdownReader
+        from app.ingest.pdf_reader import PdfReader
         from app.ingest.txt_reader import TxtReader
+        from app.ingest.word_reader import WordReader
 
         self._readers = {
             ".pdf": PdfReader(),

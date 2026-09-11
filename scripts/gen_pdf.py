@@ -1,5 +1,7 @@
-﻿from fpdf import FPDF
-import os
+﻿import os
+
+from fpdf import FPDF
+
 out = "E:/trae/cede/mcu-rag-qa-v2/data/test_normal_pdf.pdf"
 os.makedirs(os.path.dirname(out), exist_ok=True)
 pdf = FPDF()

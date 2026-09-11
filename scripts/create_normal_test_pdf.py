@@ -1,8 +1,9 @@
 ﻿#!/usr/bin/env python
 """Create a normal multi-page PDF for retrieval testing (non-legal content)."""
 
-from fpdf import FPDF
 import os
+
+from fpdf import FPDF
 
 OUTPUT = "E:/trae/cede/mcu-rag-qa-v2/data/test_normal_pdf.pdf"
 os.makedirs(os.path.dirname(OUTPUT), exist_ok=True)
@@ -189,6 +190,7 @@ pdf.output(OUTPUT)
 print(f"Created: {OUTPUT}")
 
 from pypdf import PdfReader
+
 r = PdfReader(OUTPUT)
 print(f"Pages: {len(r.pages)}")
 total = sum(len(p.extract_text() or "") for p in r.pages)

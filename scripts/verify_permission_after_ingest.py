@@ -1,5 +1,6 @@
 """验证权限过滤是否仍然正确工作。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
 from app.contracts import ChunkTypeClassification, MetaFilter

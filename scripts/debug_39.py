@@ -3,12 +3,13 @@
 
 import sys
 from pathlib import Path
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import settings
-from app.index.embedder import SentenceEmbedder
 from app.index.chroma_repo import ChromaRepository
+from app.index.embedder import SentenceEmbedder
+from config.settings import settings
 
 
 def main():

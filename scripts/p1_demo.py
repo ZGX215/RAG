@@ -19,13 +19,13 @@ from pathlib import Path
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_PROJECT_ROOT))
 
-from config.settings import settings
-from app.index.embedder import SentenceEmbedder
-from app.index.chroma_repo import ChromaRepository
-from app.ingest.pdf_reader import PdfReader
-from app.generate.llm_client import DeepSeekClient
-from app.cross.paths import ensure_data_dirs
 from app.cross.logging import setup_logging
+from app.cross.paths import ensure_data_dirs
+from app.generate.llm_client import DeepSeekClient
+from app.index.chroma_repo import ChromaRepository
+from app.index.embedder import SentenceEmbedder
+from app.ingest.pdf_reader import PdfReader
+from config.settings import settings
 
 logger = setup_logging(log_level=settings.general.log_level)
 
@@ -91,7 +91,7 @@ async def main():
 
     print(f"\n🤖 回答 ({t4 - t3:.1f}s):")
     print(f"   {answer}")
-    print(f"\n来源:")
+    print("\n来源:")
     for h in hits:
         print(f"   - {h.meta.heading_number} ({h.meta.doc_name})")
     print(f"\n⏱ 总耗时: {t4 - t0:.1f}s")

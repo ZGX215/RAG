@@ -19,8 +19,8 @@ from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-from config.settings import settings
 from app.cross.logging import get_logger
+from config.settings import settings
 
 logger = get_logger(__name__)
 

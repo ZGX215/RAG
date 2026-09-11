@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List
 
 from app.cross.logging import get_logger
 
@@ -168,7 +168,6 @@ class PromptInjectionDetector:
             return InjectionResult(detected=False)
 
         matched_patterns = []
-        categories = []
 
         # 检查各类注入
         for pattern in self._SYSTEM_PROMPT_LEAK:

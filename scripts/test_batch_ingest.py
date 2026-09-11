@@ -1,10 +1,11 @@
 """测试批量入库 API：按文件名解析密级。"""
 import sys
+
 sys.path.insert(0, 'E:/trae/cede/mcu-rag-qa-v2')
 
-import requests
 import time
-import json
+
+import requests
 
 BASE = "http://localhost:8000"
 
@@ -100,7 +101,7 @@ for s in sources:
         print(f"  ❌ 越权泄露: {s['doc_name']}")
         break
 else:
-    print(f"  ✅ 机密数据未泄露")
+    print("  ✅ 机密数据未泄露")
 
 # 用 CONFIDENTIAL 用户查询财报
 r = requests.post(
