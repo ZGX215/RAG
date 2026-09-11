@@ -16,11 +16,10 @@ P0 原则：
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field, model_validator
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _log = logging.getLogger(__name__)
@@ -37,23 +36,10 @@ if _ENV_PATH.exists():
 
 
 # ============================================================
-# 占位符判定（供模型校验与启动校验共用）
+# 占位符判定（供启动校验使用）
 # ============================================================
 # 开发默认密钥：只用于本地，生产必须替换——否则任何人都能伪造任意密级的 token
 DEV_AUTH_SECRET = "dev-only-secret-change-me-in-production"
-
-# LLM key 的备用来源：**整组**回退（key + base_url + model 必须同厂商）。
-#
-# 为什么必须整组切：.env 里可能残留别的厂商的 endpoint/model 占位符
-# （本项目就是如此：base_url 指向火山方舟 ark.cn-beijing.volces.com，
-#   model 是 ep-xxxx 占位符，而真实 key 是 DeepSeek 的）。
-# 只换 key 不换 endpoint 会得到 401 "The API key format is incorrect"，
-# 而 DeepSeekClient.generate() 会吞掉异常返回空串 —— 表现为"服务正常但答案全空"。
-# 因此回退时三者一并对齐，并在日志里说明覆盖了什么。
-LLM_FALLBACK_PROFILES: tuple[tuple[str, dict[str, str]], ...] = (
-    ("DEEPSEEK_API_KEY", {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"}),
-    ("deepseek_api_key", {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"}),
-)
 
 
 def is_placeholder_llm_key(value: str | None) -> bool:
@@ -95,35 +81,6 @@ class LLMSettings(BaseSettings):
     fallback_api_key: str = Field(default="", alias="LLM_FALLBACK_API_KEY")
     fallback_base_url: str = Field(default="", alias="LLM_FALLBACK_BASE_URL")
     fallback_model: str = Field(default="", alias="LLM_FALLBACK_MODEL")
-
-    @model_validator(mode="after")
-    def _resolve_api_key_fallback(self):
-        """LLM_API_KEY 为空/占位符时，按**整组厂商配置**回退。
-
-        与旧实现的差别：旧实现是在 import 期改写 os.environ（全局副作用、来源不可追溯）；
-        这里只改本实例的字段，并显式打日志说明覆盖了什么。
-        三者必须同厂商，原因见 LLM_FALLBACK_PROFILES 上方注释。
-        """
-        if not is_placeholder_llm_key(self.api_key):
-            return self
-
-        for env_name, profile in LLM_FALLBACK_PROFILES:
-            candidate = (os.environ.get(env_name) or "").strip()
-            if is_placeholder_llm_key(candidate):
-                continue
-
-            _log.warning(
-                "LLM_API_KEY 为空或为占位符 → 回退使用环境变量 %s，"
-                "并将 base_url 由 %r 对齐为 %r、model 由 %r 对齐为 %r"
-                "（key 与 endpoint 必须同厂商，否则会 401）",
-                env_name, self.base_url, profile["base_url"], self.model, profile["model"],
-            )
-            self.api_key = candidate
-            self.base_url = profile["base_url"]
-            self.model = profile["model"]
-            break
-
-        return self
 
 
 class EmbeddingSettings(BaseSettings):
