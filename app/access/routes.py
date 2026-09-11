@@ -7,7 +7,7 @@ P3 改造：POST /ingest 改为异步（Celery 后台处理），不阻塞问答
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, NamedTuple, Optional
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, Request
@@ -19,6 +19,7 @@ from app.contracts import MetaFilter
 from app.cross.answer_cache import get_answer_cache
 from app.cross.celery_app import celery_app
 from app.cross.context import get_current_context
+from app.cross.exceptions import LLMError
 from app.cross.logging import get_logger
 from app.cross.metrics import metrics
 from app.db import crud
@@ -57,6 +58,26 @@ class QAResponse(BaseModel):
     answer: str = ""
     sources: list[SourceItem] = []
     request_id: str = ""
+    # 降级标识：LLM 未正常作答、走了兜底（原文片段 / 通用规则）。
+    # 暴露给 API 消费者，使其能自行决定是否提示"结果可能不完整" ——
+    # 以往这些信息只写在日志里，客户端无从得知拿到的是降级结果。
+    degraded: bool = False
+    # 降级原因："" | "llm_error" | "llm_empty"
+    degrade_reason: str = ""
+
+
+class GeneratedAnswer(NamedTuple):
+    """_llm_generate 的返回值。
+
+    为什么用显式结构而不是"靠文本内容判断是否降级"：
+    原先用 `"相关资料如下：" in answer` 反推是否降级，是脆弱启发式 ——
+    一旦兜底文案改动或模型恰好也输出这句话，判断立刻失效。
+    这里由生成流程显式告知，判断依据可靠。
+    """
+
+    text: str
+    degraded: bool = False
+    reason: str = ""
 
 
 class IngestRequest(BaseModel):
@@ -146,10 +167,11 @@ async def _qa_json(
         )
 
     # 降级链路 3：LLM 生成
-    answer = await _llm_generate(question, hits, request_id, fallback_provider)
+    generated = await _llm_generate(question, hits, request_id, fallback_provider)
+    answer = generated.text
 
-    # 缓存（仅缓存正常 LLM 生成结果，不缓存降级原文片段）
-    if answer and "相关资料如下：" not in answer:
+    # 缓存（仅缓存 LLM 正常作答的结果，不缓存降级内容）
+    if answer and not generated.degraded:
         try:
             answer_cache.set(question, tenant, clearance, answer, ttl=3600)
         except Exception as e:
@@ -162,7 +184,7 @@ async def _qa_json(
     logger.info("qa response: request_id=%s hits=%d answer_len=%d", request_id, len(hits), len(answer))
 
     # 记录查询日志到数据库
-    is_degraded = "相关资料如下：" in answer
+    is_degraded = generated.degraded
     if db is not None:
         try:
             log = crud.create_query_log(
@@ -184,7 +206,13 @@ async def _qa_json(
         except Exception as e:
             logger.warning("query log write failed: %s", e)
 
-    return QAResponse(answer=answer, sources=sources, request_id=request_id)
+    return QAResponse(
+        answer=answer,
+        sources=sources,
+        request_id=request_id,
+        degraded=generated.degraded,
+        degrade_reason=generated.reason,
+    )
 
 
 async def _qa_stream(
@@ -246,29 +274,48 @@ async def _qa_stream(
         user_prompt = f"参考资料：\n{context}\n\n问题：{question}"
 
         full_answer = ""
+        degraded = False
+        degrade_reason = "llm_error"
         try:
             async for token in llm.generate_stream(system_prompt, user_prompt):
                 full_answer += token
                 yield f"data: {token}\n\n"
+            if not full_answer.strip():
+                # 流打开成功但一个 token 都没产出 —— 与"调用失败"区分开：
+                # 前者查提示词/模型行为，后者查 key/配额/网络。
+                degrade_reason = "llm_empty"
+                metrics.degrade_total.labels(layer="llm_empty").inc()
+                logger.error("stream produced no token: request_id=%s", request_id)
         except Exception as e:
-            logger.error("stream generation failed: %s", e)
+            metrics.degrade_total.labels(layer="llm_error").inc()
+            logger.error("stream generation failed: request_id=%s %s", request_id, e)
             # 降级为原文片段
             raw_parts = []
             for h in hits[:3]:
                 header = h.meta.heading_number or h.meta.heading_title or ""
                 raw_parts.append(f"[{header}]\n{h.content[:300]}")
             if raw_parts:
+                metrics.degrade_total.labels(layer="llm_fallback").inc()
                 fallback_text = "\n\n---\n相关资料如下：\n" + "\n\n".join(raw_parts)
                 yield f"data: {fallback_text}\n\n"
                 full_answer = fallback_text
+                degraded = True
 
         if not full_answer:
             yield "data: 系统暂时无法处理此问题，请稍后再试。\n\n"
             full_answer = "系统暂时无法处理此问题，请稍后再试。"
+            degraded = True
 
-        # 缓存（仅缓存正常 LLM 生成结果，不缓存降级原文片段）
+        # 把降级状态送上线路：
+        # 用 SSE 注释行（以 ":" 开头）。按 SSE 规范，注释必须被客户端忽略 ——
+        # EventSource 会忽略，本项目前端也只取每个块里第一条 "data: " 行，
+        # 因此不改变既有协议，却让抓原始流的人（curl / 测试 / 代理）能看出这是降级结果。
+        if degraded:
+            yield f": degraded={degrade_reason}\n\n"
+
+        # 缓存（仅缓存 LLM 正常作答的结果，不缓存降级内容）
         try:
-            if "相关资料如下：" not in full_answer:
+            if not degraded and full_answer:
                 answer_cache.set(question, tenant, clearance, full_answer, ttl=3600)
         except Exception:
             pass
@@ -338,8 +385,16 @@ async def _llm_generate(
     hits: list,
     request_id: str,
     fallback_provider: Any,
-) -> str:
-    """LLM 生成：主模型 → 备用 → 原文片段 → 通用兜底。"""
+) -> GeneratedAnswer:
+    """LLM 生成：主模型 → 备用 → 原文片段 → 通用兜底。
+
+    区分"调用失败"（LLM_ERROR）与"返回空内容"（LLM_EMPTY）并分别打指标 ——
+    两者都会降级，但排查方向完全不同：前者查 key / 配额 / 网络，
+    后者查提示词与模型行为。混在一起会浪费排查时间。
+
+    Returns:
+        GeneratedAnswer：degraded=True 表示走了兜底，reason 说明成因。
+    """
     from app.generate.llm_client import DeepSeekClient
 
     llm = DeepSeekClient(
@@ -358,34 +413,54 @@ async def _llm_generate(
     )
     user_prompt = f"参考资料：\n{context}\n\n问题：{question}"
 
+    # 走到下面的降级分支就说明 LLM 未正常作答；具体成因在 except 里覆盖
+    degrade_reason = "llm_error"
+
     try:
         answer = await llm.generate(system_prompt, user_prompt)
-        if answer:
+        if answer.strip():
             logger.info("LLM generation ok: request_id=%s answer_len=%d", request_id, len(answer))
-            return answer
+            return GeneratedAnswer(text=answer)
+        # 理论上不可达（generate 要么返回非空、要么抛 LLMError）。
+        # 保留此分支是为了让"未来有人把 generate 改回返回空串"时仍能被计入指标，
+        # 而不是静默地把空答案当成正常结果返回给用户。
+        degrade_reason = "llm_empty"
+        metrics.degrade_total.labels(layer="llm_empty").inc()
+        logger.warning("LLM returned blank content without raising: request_id=%s", request_id)
+    except LLMError as e:
+        degrade_reason = "llm_empty" if e.code == "LLM_EMPTY" else "llm_error"
+        metrics.degrade_total.labels(layer=degrade_reason).inc()
+        logger.error("LLM generation failed: request_id=%s code=%s %s", request_id, e.code, e)
     except Exception as e:
-        logger.error("LLM generation failed: %s", e)
+        metrics.degrade_total.labels(layer="llm_error").inc()
+        logger.error("LLM generation failed (unexpected): request_id=%s %s", request_id, e)
 
     # 降级：原文片段
     metrics.degrade_total.labels(layer="llm_fallback").inc()
-    logger.warning("LLM empty, using raw text snippets: request_id=%s", request_id)
+    logger.warning("LLM unavailable, using raw text snippets: request_id=%s", request_id)
     raw_parts = []
     max_chars = settings.generate.context_max_chars // len(hits[:3]) if hits else 500
     for h in hits[:3]:
         header = h.meta.heading_number or h.meta.heading_title or ""
         raw_parts.append(f"[{header}]\n{h.content[:max_chars]}")
     if raw_parts:
-        return "\n\n---\n相关资料如下：\n" + "\n\n".join(raw_parts)
+        return GeneratedAnswer(
+            text="\n\n---\n相关资料如下：\n" + "\n\n".join(raw_parts),
+            degraded=True,
+            reason=degrade_reason,
+        )
 
     # 通用兜底
     try:
         generic_rule = fallback_provider.get_fallback_rule()
         if generic_rule:
-            return generic_rule.answer
+            return GeneratedAnswer(text=generic_rule.answer, degraded=True, reason=degrade_reason)
     except Exception:
         pass
 
-    return "系统暂时无法处理此问题，请稍后再试。"
+    return GeneratedAnswer(
+        text="系统暂时无法处理此问题，请稍后再试。", degraded=True, reason=degrade_reason,
+    )
 
 
 # ============================================================

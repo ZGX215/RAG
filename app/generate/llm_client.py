@@ -1,7 +1,16 @@
 """LLM 客户端 — 对齐 contracts.py 的 LLMClient Protocol。
 
 P3 Step 4 升级：支持主模型 + 备用模型自动降级。
-降级链路：主模型失败 → 试备用模型 → 备用也失败 → 兜底规则。
+降级链路：主模型失败 → 试备用模型 → 备用也失败 → 调用方兜底规则。
+
+**失败语义（重要）**：generate() 全部失败时**抛 LLMError，不返回空串**。
+返回空串会让"模型调用失败"与"模型答了但内容为空"在调用方看来完全一样，
+表现为"服务一切正常、日志无异常，但每个答案都是空的"。
+本项目的真实案例：一个已失效的 API key 配置因此长期未被发现。
+现在两种情形都抛 LLMError，并用 code 区分：
+  - "LLM_ERROR"：调用本身失败（401 / 超时 / 限流 / 网络）
+  - "LLM_EMPTY"：调用成功但模型返回空内容
+调用方据此分别打指标，并把降级状态暴露到 API 响应里。
 """
 
 from __future__ import annotations
@@ -10,6 +19,7 @@ from typing import AsyncGenerator, Optional
 
 from openai import AsyncOpenAI, OpenAI
 
+from app.cross.exceptions import LLMError
 from app.cross.logging import get_logger
 
 logger = get_logger(__name__)
@@ -73,22 +83,37 @@ class DeepSeekClient:
     ) -> str:
         """非流式生成，自动降级：主模型 → 备用模型。
 
-        主模型失败时自动切到备用模型（如果配置了）。
+        所有模型都没拿到有效内容时**抛 LLMError**（不再返回空串）。
+        返回空串会让调用方无法区分"模型失败"与"模型答了空内容"，
+        而前者是必须被告警的故障。
+
+        Raises:
+            LLMError: 全部模型均未返回有效内容。
+                code="LLM_ERROR" 表示调用失败；code="LLM_EMPTY" 表示调用成功但内容为空。
         """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        failures: list[str] = []        # 调用抛异常的尝试
+        empty_attempts: list[str] = []  # 调用成功但内容为空的尝试
+
         # 尝试主模型
+        model_name = model or self._model
         try:
-            model_name = model or self._model
             resp = await self._client.chat.completions.create(
                 model=model_name,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=messages,
                 temperature=0.1,
                 max_tokens=1024,
             )
-            return resp.choices[0].message.content or ""
+            content = resp.choices[0].message.content or ""
+            if content.strip():
+                return content
+            empty_attempts.append(f"primary({model_name})")
+            logger.warning("primary model returned empty content: model=%s", model_name)
         except Exception as e:
+            failures.append(f"primary({model_name}): {e}")
             logger.warning("primary model failed: %s", e)
 
         # 尝试备用模型
@@ -97,20 +122,27 @@ class DeepSeekClient:
                 logger.info("trying fallback model: %s", self._fallback_model)
                 resp = await self._fallback_client.chat.completions.create(
                     model=self._fallback_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
+                    messages=messages,
                     temperature=0.1,
                     max_tokens=1024,
                 )
-                return resp.choices[0].message.content or ""
+                content = resp.choices[0].message.content or ""
+                if content.strip():
+                    return content
+                empty_attempts.append(f"fallback({self._fallback_model})")
+                logger.warning("fallback model returned empty content")
             except Exception as e:
+                failures.append(f"fallback({self._fallback_model}): {e}")
                 logger.warning("fallback model also failed: %s", e)
 
-        # 都失败了，返回空字符串，让调用方走兜底规则
-        logger.error("all LLM models failed, returning empty")
-        return ""
+        # 全部尝试都没拿到内容 —— 明确抛出，让上层能感知并告警。
+        # 区分两种成因：调用失败（需告警排查）vs 内容为空（可能是提示词问题）。
+        detail = "; ".join(failures + [f"{a} 返回空内容" for a in empty_attempts])
+        if failures:
+            logger.error("all LLM models failed: %s", detail)
+            raise LLMError(f"所有 LLM 模型调用失败：{detail}", code="LLM_ERROR")
+        logger.error("all LLM models returned empty content: %s", detail)
+        raise LLMError(f"所有 LLM 模型均返回空内容：{detail}", code="LLM_EMPTY")
 
     async def generate_stream(
         self,
