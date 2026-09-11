@@ -76,7 +76,7 @@ footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);color:v
 
 <header>
   <h1>MCU RAG QA 准确率诊断报告</h1>
-  <div class="sub">对 <code>E:\trae\cede\mcu-rag-qa-v2</code> 全量代码的静态审查 + 向量库实测</div>
+  <div class="sub">对 <code>mcu-rag-qa-v2</code> 全量代码的静态审查 + 向量库实测</div>
   <div class="meta">
     <span><b>审查范围</b> app/ 全部 21 个模块 · config/ · main.py · .env</span>
     <span><b>实测数据</b> data/chroma_db/chroma.sqlite3（41 chunks）+ 你的 9 个测试文档复现检索</span>
@@ -672,7 +672,7 @@ logger.info("stage=llm answer_len=%d is_fallback=%s", len(answer), is_raw)</code
 </table>
 
 <footer>
-报告基于 <code>E:\trae\cede\mcu-rag-qa-v2</code> 静态代码审查、<code>chroma.sqlite3</code> 实测，以及用你提供的 9 个测试文档复现 <code>hybrid.py</code> BM25 逻辑 + 真实 BGE-base-zh-v1.5 稠密检索的对照实验。<br>
+报告基于 <code>mcu-rag-qa-v2</code> 静态代码审查、<code>chroma.sqlite3</code> 实测，以及用你提供的 9 个测试文档复现 <code>hybrid.py</code> BM25 逻辑 + 真实 BGE-base-zh-v1.5 稠密检索的对照实验。<br>
 复现脚本：<code>retrieval_probe.py</code>（BM25 侧）、<code>dense_probe.py</code>（稠密侧），可重复运行。<br>
 未启动 API 服务，也未调用 LLM；LLM 相关结论由配置与代码路径推导，建议按第 7 节打点复验。
 </footer>

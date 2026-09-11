@@ -60,8 +60,8 @@ class QAResponse(BaseModel):
 
 
 class IngestRequest(BaseModel):
+    # 必填：原先这里默认指向开发者本机的桌面文件，别人调用必然失败（且泄露本机路径）
     file_path: str = Field(
-        default=r"C:\Users\Lenovo\Desktop\附件1：《中华人民共和国个人信息保护法》.pdf",
         description="文件路径（支持 PDF/Word/Markdown/TXT）",
     )
     doc_name: str = Field(default="", description="文档名称（留空则用文件名）")
