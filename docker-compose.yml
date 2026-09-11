@@ -1,0 +1,94 @@
+# ============================================================
+# RAG 问答系统 - 一键部署编排
+#
+# 用法:
+#   docker compose up -d        # 后台启动全部服务
+#   docker compose logs -f web  # 看 web 服务日志
+#   docker compose down         # 停止并删除容器（数据保留）
+#
+# 服务说明:
+#   web    - FastAPI 问答接口 (端口 8000)
+#   redis  - Redis 缓存 + Celery 消息队列 (端口 6379)
+#   worker - Celery 异步入库 worker (无端口)
+# ============================================================
+
+services:
+  # ----------------------------------------------------------
+  # Redis：缓存 + 消息队列
+  # ----------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ----------------------------------------------------------
+  # Web：FastAPI 问答服务
+  # ----------------------------------------------------------
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-web
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # 容器内 Redis 地址用服务名 redis，不是 localhost
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CACHE_REDIS_URL=redis://redis:6379/2
+      # 数据目录在容器内的路径（volume 挂载）
+      - INDEX_PERSIST_DIR=/app/data/chroma_db
+      - INDEX_STRUCTURED_DB_PATH=/app/data/structured.db
+      - DATABASE_URL=sqlite:////app/data/structured.db
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s  # 首次启动模型加载慢，给 60 秒
+
+  # ----------------------------------------------------------
+  # Worker：Celery 异步入库
+  # ----------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-worker
+    restart: unless-stopped
+    command: celery -A app.cross.celery_app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - CACHE_REDIS_URL=redis://redis:6379/2
+      - INDEX_PERSIST_DIR=/app/data/chroma_db
+      - INDEX_STRUCTURED_DB_PATH=/app/data/structured.db
+      - DATABASE_URL=sqlite:////app/data/structured.db
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:

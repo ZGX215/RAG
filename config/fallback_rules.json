@@ -1,0 +1,9 @@
+[
+    {
+        "id": "fallback_generic",
+        "keywords": [],
+        "answer": "抱歉，目前大模型服务暂时不可用，无法回答您的问题。请稍后再试。",
+        "mode": "any",
+        "description": "通用兜底"
+    }
+]

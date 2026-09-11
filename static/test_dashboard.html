@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG 检索测试面板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Microsoft YaHei", sans-serif;
+    background: #0f1117; color: #e0e0e0;
+    padding: 20px; max-width: 1200px; margin: 0 auto;
+  }
+  h1 { font-size: 22px; margin-bottom: 16px; color: #4fc3f7; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel {
+    background: #1a1d29; border: 1px solid #2a2d3a; border-radius: 8px;
+    padding: 20px;
+  }
+  .panel h2 { font-size: 15px; color: #888; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* 输入区 */
+  .input-group { margin-bottom: 12px; }
+  label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; }
+  input[type="text"], select {
+    width: 100%; padding: 8px 12px; background: #252836; border: 1px solid #3a3d4a;
+    border-radius: 4px; color: #e0e0e0; font-size: 14px;
+  }
+  input[type="text"]:focus, select:focus { outline: none; border-color: #4fc3f7; }
+  .btn {
+    padding: 8px 20px; border: none; border-radius: 4px; cursor: pointer;
+    font-size: 14px; font-weight: 600; transition: all 0.2s;
+  }
+  .btn-primary { background: #4fc3f7; color: #0f1117; }
+  .btn-primary:hover { background: #29b6f6; }
+  .btn-secondary { background: #3a3d4a; color: #e0e0e0; margin-left: 8px; }
+  .btn-secondary:hover { background: #4a4d5a; }
+
+  /* 快捷查询 */
+  .quick-queries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip {
+    padding: 4px 10px; background: #252836; border: 1px solid #3a3d4a;
+    border-radius: 12px; font-size: 12px; cursor: pointer; color: #aaa;
+  }
+  .chip:hover { background: #4fc3f7; color: #0f1117; border-color: #4fc3f7; }
+
+  /* 结果区 */
+  .result-card {
+    background: #252836; border: 1px solid #3a3d4a; border-radius: 6px;
+    padding: 12px; margin-bottom: 10px;
+  }
+  .result-card .meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+  }
+  .result-card .rank {
+    font-size: 12px; color: #888; background: #3a3d4a; padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .result-card .title { font-size: 14px; color: #4fc3f7; }
+  .result-card .scores {
+    display: flex; gap: 12px; font-size: 11px; color: #888; margin-top: 4px;
+  }
+  .result-card .scores span { font-family: monospace; }
+  .result-card .content {
+    font-size: 13px; color: #ccc; line-height: 1.6; margin-top: 6px;
+    max-height: 120px; overflow-y: auto;
+  }
+  .result-card .content::-webkit-scrollbar { width: 4px; }
+  .result-card .content::-webkit-scrollbar-thumb { background: #4fc3f7; border-radius: 2px; }
+
+  /* 状态指示 */
+  .status { font-size: 12px; padding: 4px 10px; border-radius: 4px; display: inline-block; }
+  .status-ok { background: #1b5e20; color: #4caf50; }
+  .status-err { background: #b71c1c; color: #ef5350; }
+  .status-loading { background: #455a64; color: #b0bec5; }
+
+  /* LLM 回答区 */
+  .answer-box {
+    background: #1a2332; border: 1px solid #2a3d4a; border-radius: 6px;
+    padding: 14px; margin-top: 12px; font-size: 14px; line-height: 1.7;
+    color: #81c784; white-space: pre-wrap; max-height: 300px; overflow-y: auto;
+  }
+  .answer-box::-webkit-scrollbar { width: 4px; }
+  .answer-box::-webkit-scrollbar-thumb { background: #4fc3f7; border-radius: 2px; }
+
+  .empty { color: #666; text-align: center; padding: 20px; }
+  .timer { font-size: 12px; color: #888; }
+</style>
+</head>
+<body>
+<h1>RAG 检索测试面板</h1>
+<div class="layout">
+  <!-- 左侧：输入 -->
+  <div class="panel">
+    <h2>查询输入</h2>
+    <div class="input-group">
+      <label>问题</label>
+      <input type="text" id="question" placeholder="输入检索问题..." value="产品功能列表">
+    </div>
+    <div class="input-group">
+      <label>权限等级</label>
+      <select id="clearance">
+        <option value="public">PUBLIC（公开）</option>
+        <option value="internal">INTERNAL（内部）</option>
+        <option value="confidential">CONFIDENTIAL（机密）</option>
+        <option value="secret">SECRET（绝密）</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>Top K</label>
+      <select id="topK">
+        <option value="3">3</option>
+        <option value="5" selected>5</option>
+        <option value="10">10</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>租户 ID</label>
+      <input type="text" id="tenant" value="default" placeholder="租户标识">
+    </div>
+    <div style="margin-top: 12px;">
+      <button class="btn btn-primary" onclick="runSearch()">检索</button>
+      <button class="btn btn-secondary" onclick="runQA()">问答（含LLM）</button>
+    </div>
+    <div style="margin-top: 16px;">
+      <label>快捷查询</label>
+      <div class="quick-queries">
+        <span class="chip" onclick="setQ('产品功能列表')">产品功能列表</span>
+        <span class="chip" onclick="setQ('公司主营业务')">公司主营业务</span>
+        <span class="chip" onclick="setQ('混合检索架构')">混合检索架构</span>
+        <span class="chip" onclick="setQ('年度财务营收')">年度财务营收</span>
+        <span class="chip" onclick="setQ('股权激励')">股权激励</span>
+        <span class="chip" onclick="setQ('年假多少天')">年假多少天</span>
+        <span class="chip" onclick="setQ('公司发展历程')">公司发展历程</span>
+        <span class="chip" onclick="setQ('休假制度')">休假制度</span>
+        <span class="chip" onclick="setQ('技术路线图')">技术路线图</span>
+      </div>
+    </div>
+    <div id="statusArea" style="margin-top: 12px;"></div>
+  </div>
+
+  <!-- 右侧：结果 -->
+  <div class="panel">
+    <h2>检索结果 <span id="timer" class="timer"></span></h2>
+    <div id="results">
+      <div class="empty">点击"检索"按钮开始测试</div>
+    </div>
+    <div id="answerArea" style="display:none;">
+      <h2 style="margin-top: 16px;">LLM 回答</h2>
+      <div class="answer-box" id="answerText"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+
+function setQ(q) {
+  document.getElementById('question').value = q;
+}
+
+function setStatus(text, type) {
+  const el = document.getElementById('statusArea');
+  if (!text) { el.innerHTML = ''; return; }
+  el.innerHTML = `<span class="status status-${type}">${text}</span>`;
+}
+
+function getHeaders() {
+  const clearance = document.getElementById('clearance').value;
+  const tenant = document.getElementById('tenant').value;
+  return {
+    'Content-Type': 'application/json',
+    'X-User-Clearance': clearance,
+    'X-User-Tenant': tenant,
+  };
+}
+
+function getParams() {
+  const q = document.getElementById('question').value.trim();
+  const topK = parseInt(document.getElementById('topK').value);
+  return { question: q, top_k: topK };
+}
+
+function renderResults(data) {
+  const el = document.getElementById('results');
+  const timer = document.getElementById('timer');
+
+  if (data.elapsed_ms) {
+    timer.textContent = `（${data.elapsed_ms}ms）`;
+  }
+
+  const sources = data.sources || [];
+  if (sources.length === 0) {
+    el.innerHTML = '<div class="empty">无检索结果</div>';
+    return;
+  }
+
+  el.innerHTML = sources.map((s, i) => {
+    const title = s.heading_number || s.doc_name || '未知';
+    const score = s.score ? s.score.toFixed(4) : 'N/A';
+    const content = s.content ? s.content.substring(0, 200) : '';
+    return `
+      <div class="result-card">
+        <div class="meta">
+          <span class="title">[${title}]</span>
+          <span class="rank">#${i+1}</span>
+        </div>
+        <div class="scores">
+          <span>score: ${score}</span>
+          <span>doc: ${s.doc_name || ''}</span>
+        </div>
+        <div class="content">${escapeHtml(content)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderAnswer(data) {
+  const area = document.getElementById('answerArea');
+  const text = document.getElementById('answerText');
+  if (data.answer) {
+    area.style.display = 'block';
+    text.textContent = data.answer;
+  } else {
+    area.style.display = 'none';
+  }
+}
+
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function runSearch() {
+  const params = getParams();
+  if (!params.question) return;
+
+  setStatus('检索中...', 'loading');
+  document.getElementById('results').innerHTML = '<div class="empty">加载中...</div>';
+  document.getElementById('answerArea').style.display = 'none';
+
+  const t0 = performance.now();
+  try {
+    const resp = await fetch(`${API_BASE}/api/v1/qa`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ ...params, stream: false }),
+    });
+    const t1 = performance.now();
+    const elapsed = Math.round(t1 - t0);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    data.elapsed_ms = elapsed;
+    renderResults(data);
+    setStatus(`完成（${elapsed}ms）`, 'ok');
+  } catch (e) {
+    setStatus('错误: ' + e.message, 'err');
+    document.getElementById('results').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+
+async function runQA() {
+  const params = getParams();
+  if (!params.question) return;
+
+  setStatus('问答中（含LLM生成）...', 'loading');
+  document.getElementById('results').innerHTML = '<div class="empty">加载中...</div>';
+  document.getElementById('answerArea').style.display = 'none';
+
+  const t0 = performance.now();
+  try {
+    const resp = await fetch(`${API_BASE}/api/v1/qa`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ ...params, stream: false }),
+    });
+    const t1 = performance.now();
+    const elapsed = Math.round(t1 - t0);
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    data.elapsed_ms = elapsed;
+    renderResults(data);
+    renderAnswer(data);
+    setStatus(`完成（${elapsed}ms）`, 'ok');
+  } catch (e) {
+    setStatus('错误: ' + e.message, 'err');
+    document.getElementById('results').innerHTML = `<div class="empty">${e.message}</div>`;
+  }
+}
+</script>
+</body>
+</html>

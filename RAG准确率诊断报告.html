@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCU RAG QA 准确率诊断报告</title>
+<style>
+:root{
+  --bg:#14161a; --panel:#1c1f26; --panel2:#22262f; --line:#2e333d;
+  --tx:#e6e8ec; --tx2:#a8aeb9; --tx3:#7a8291;
+  --red:#e5484d; --orange:#f5a524; --yellow:#e8c547; --blue:#4a9eff; --green:#3ecf8e; --purple:#a78bfa;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;line-height:1.75;font-size:15px}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 28px 80px}
+header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:36px}
+h1{font-size:30px;font-weight:700;letter-spacing:-.5px;margin-bottom:10px}
+.sub{color:var(--tx3);font-size:14px}
+.meta{display:flex;gap:20px;flex-wrap:wrap;margin-top:16px;font-size:13px;color:var(--tx2)}
+.meta b{color:var(--tx);font-weight:600}
+h2{font-size:21px;font-weight:700;margin:44px 0 16px;padding-left:12px;border-left:3px solid var(--blue)}
+h3{font-size:17px;font-weight:650;margin:28px 0 12px;color:var(--tx)}
+p{margin-bottom:12px;color:var(--tx)}
+code{background:var(--panel2);padding:2px 6px;border-radius:4px;font-family:"Cascadia Code",Consolas,monospace;font-size:13px;color:#8fd3ff}
+pre{background:#0f1115;border:1px solid var(--line);border-radius:8px;padding:16px;overflow-x:auto;margin:14px 0;font-size:13px;line-height:1.6}
+pre code{background:none;padding:0;color:#c8d0dc}
+.lead{background:linear-gradient(135deg,#1e2430,#1a1d24);border:1px solid var(--line);border-left:4px solid var(--red);border-radius:10px;padding:22px 26px;margin:24px 0}
+.lead h3{margin-top:0;color:var(--red)}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14px}
+th{background:var(--panel2);text-align:left;padding:11px 14px;font-weight:600;color:var(--tx2);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:2px 9px;border-radius:5px;font-size:12px;font-weight:700;white-space:nowrap}
+.p0{background:rgba(229,72,77,.18);color:#ff7b7f;border:1px solid rgba(229,72,77,.4)}
+.p1{background:rgba(245,165,36,.16);color:#ffb951;border:1px solid rgba(245,165,36,.35)}
+.p2{background:rgba(74,158,255,.14);color:#7cb8ff;border:1px solid rgba(74,158,255,.3)}
+.ok{background:rgba(62,207,142,.14);color:#5fe0aa;border:1px solid rgba(62,207,142,.3)}
+.issue{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px 24px;margin:18px 0}
+.issue.crit{border-left:4px solid var(--red)}
+.issue.major{border-left:4px solid var(--orange)}
+.issue.minor{border-left:4px solid var(--blue)}
+.issue h4{font-size:16px;font-weight:650;margin-bottom:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.loc{font-family:Consolas,monospace;font-size:12.5px;color:var(--tx3);background:var(--panel2);padding:3px 8px;border-radius:4px;font-weight:400}
+.issue ul{margin:10px 0 10px 20px;color:var(--tx2)}
+.issue li{margin-bottom:6px}
+.issue li b{color:var(--tx)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:20px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+.card .n{font-size:26px;font-weight:700;letter-spacing:-1px}
+.card .l{font-size:13px;color:var(--tx3);margin-top:4px}
+.flow{margin:24px 0}
+.step{display:flex;gap:16px;align-items:flex-start;padding:14px 0;border-bottom:1px dashed var(--line)}
+.step:last-child{border:none}
+.sn{flex:0 0 30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;background:var(--panel2);border:1px solid var(--line)}
+.step .sc{flex:1}
+.step .st{font-weight:650;margin-bottom:3px}
+.step .sd{font-size:13.5px;color:var(--tx2)}
+.kill .sn{background:rgba(229,72,77,.2);border-color:rgba(229,72,77,.5);color:#ff7b7f}
+.pass .sn{background:rgba(62,207,142,.15);border-color:rgba(62,207,142,.4);color:#5fe0aa}
+.fix{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin:14px 0}
+.fix h4{color:var(--green);font-size:15.5px;margin-bottom:12px}
+.fix .why{color:var(--tx2);font-size:14px;margin-bottom:10px}
+.tag{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;font-size:12.5px;color:var(--tx2);margin:0 6px 6px 0}
+.warn{background:rgba(245,165,36,.08);border:1px solid rgba(245,165,36,.25);border-radius:8px;padding:14px 18px;margin:14px 0;font-size:14px;color:#e8d5a8}
+.toc{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 24px;margin:24px 0}
+.toc a{color:var(--tx2);text-decoration:none;font-size:14px;display:block;padding:4px 0}
+.toc a:hover{color:var(--blue)}
+footer{margin-top:60px;padding-top:24px;border-top:1px solid var(--line);color:var(--tx3);font-size:13px}
+.hl{color:var(--orange);font-weight:600}
+.hlr{color:var(--red);font-weight:600}
+.hlg{color:var(--green);font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>MCU RAG QA 准确率诊断报告</h1>
+  <div class="sub">对 <code>E:\trae\cede\mcu-rag-qa-v2</code> 全量代码的静态审查 + 向量库实测</div>
+  <div class="meta">
+    <span><b>审查范围</b> app/ 全部 21 个模块 · config/ · main.py · .env</span>
+    <span><b>实测数据</b> data/chroma_db/chroma.sqlite3（41 chunks）+ 你的 9 个测试文档复现检索</span>
+    <span><b>问题总数</b> 4 项 P0 · 11 项 P1 · 4 项 P2</span>
+  </div>
+</header>
+
+<div class="lead">
+  <h3>核心结论</h3>
+  <p style="margin-bottom:8px">准确率低<span class="hlr">不是检索算法调参问题</span>，而是<strong>四道关卡各自独立失效</strong>叠加的结果。按当前代码状态，一个典型的 MCU 问题在到达检索层之前就已大概率被拦截或降级。</p>
+  <p style="margin-bottom:0">更关键的是：<span class="hl">你在 .env / settings.py 里改的所有检索参数（top_k、rrf_k、dense_weight、sparse_weight、context_max_chars、EMBEDDING_MODEL）在代码里全都没有被读取</span>。这解释了为什么反复调参准确率没有变化——改动根本没有生效。</p>
+  <p style="margin-bottom:0;margin-top:10px">补充一条<b>实测反直觉发现</b>：稠密检索（BGE）在你这套数据上的 top1 正确率是 5/6，反超 BM25；而代码把稠密权重设成 1.0、稀疏设成 2.0～5.0 —— <span class="hlr">把更准的那一路压到了 1/5</span>。详见第 0 节实测。</p>
+</div>
+
+<div class="toc">
+  <a href="#s0">0. 检索实测：用你的 9 个测试文档跑真实检索</a>
+  <a href="#s1">1. 实测：测试集与 MCU 定位错配</a>
+  <a href="#s2">2. 一次请求要过的 5 道关卡（含 3 处提前拦截）</a>
+  <a href="#s3">3. P0 致命问题（4 项）</a>
+  <a href="#s4">4. P1 检索与生成问题（11 项）</a>
+  <a href="#s5">5. P2 工程与可维护性问题（4 项）</a>
+  <a href="#s6">6. 修复方案：三批落地</a>
+  <a href="#s7">7. 验证方法</a>
+</div>
+
+<h2 id="s0">0. 检索实测：用你的 9 个测试文档跑真实检索</h2>
+
+<p>拿到了你 TraeWork 里的 9 个测试文档（<code>公司简介_PUBLIC</code>、<code>产品介绍_PUBLIC</code>、<code>员工手册_PUBLIC</code>、<code>内部管理制度_INTERNAL</code>、<code>战略规划_INTERNAL</code>、<code>核心技术方案_INTERNAL</code>、<code>年度财务报告_CONFIDENTIAL</code>、<code>薪资结构_CONFIDENTIAL</code>、<code>大客户名单_SECRET</code>）后，我把它们在你本地 <code>chroma.sqlite3</code> 中对应的 41 条真实 chunk 取出来，<strong>完整复现 <code>hybrid.py</code> 的 BM25 逻辑 + 真实的 BGE-base-zh-v1.5 稠密检索</strong>，跑了 6 条典型查询。以下是实测结果。</p>
+
+<h3>0.1 稠密检索 vs BM25：谁更准</h3>
+
+<table>
+<tr><th>查询</th><th>BM25 top1</th><th>稠密 top1（cosine）</th><th>结论</th></tr>
+<tr><td>公司成立于哪一年</td><td class="ok">公司简介·段落2 ✓</td><td style="color:var(--red)">年度财务报告·业绩预测 ✗<br><span style="font-size:12px">cos=0.5170</span></td><td>稠密错</td></tr>
+<tr><td>员工年假有多少天</td><td class="ok">员工手册·休假制度 ✓</td><td class="ok">员工手册·休假制度 ✓<br><span style="font-size:12px">cos=0.7533</span></td><td>都对</td></tr>
+<tr><td>中级工程师的年薪范围</td><td class="ok">薪资结构·岗位薪资范围 ✓</td><td class="ok">薪资结构·岗位薪资范围 ✓<br><span style="font-size:12px">cos=0.7370</span></td><td>都对</td></tr>
+<tr><td>2025年公司营收是多少</td><td class="ok">年度财务报告·段落2 ✓</td><td class="ok">年度财务报告·段落2 ✓<br><span style="font-size:12px">cos=0.7390</span></td><td>都对</td></tr>
+<tr><td>公司有哪些大客户</td><td style="color:var(--red)">公司简介·主营业务 ✗</td><td class="ok">大客户名单·段落2 ✓<br><span style="font-size:12px">cos=0.7109</span></td><td><b>BM25 错</b></td></tr>
+<tr><td>技术部的年度预算是多少</td><td class="ok">年度财务报告·部门预算 ✓</td><td class="ok">年度财务报告·部门预算 ✓<br><span style="font-size:12px">cos=0.7391</span></td><td>都对</td></tr>
+</table>
+
+<p><b>关键读数：</b></p>
+<ul style="margin:10px 0 10px 20px;color:var(--tx2)">
+<li><b>稠密检索质量其实优于 BM25。</b>正确匹配时 cosine 稳定在 <span class="hlg">0.71–0.75</span>，而凑数匹配只有 <span class="hlr">0.35–0.46</span> —— 区分度极好，完全可以用阈值做"无相关文档"判定。</li>
+<li>但代码里 <code>sparse_weight</code> 默认 2.0、boost 时 5.0，而稠密权重固定 1.0。<span class="hlr">等于把更准的那一路的权重压到了 1/5。</span>权重方向搞反了。</li>
+<li>"公司有哪些大客户" 稠密 top1 正确而 BM25 错误（BM25 把"公司""客户"当独立词匹配，被"公司简介·主营业务"里那句"已服务超过100家客户"抢走了排名）。</li>
+</ul>
+
+<h3>0.2 对照实验：标题加分确实一点用都没有</h3>
+<p>把 <code>heading_number</code> 从"段落N"换成从正文提取的真实标题（"公司概况""休假制度""岗位薪资范围"）后重跑：</p>
+<pre><code>查询：公司成立于哪一年      → 排序相同（标题加分未产生任何影响）
+查询：员工年假有多少天      → 排序相同（标题加分未产生任何影响）
+查询：公司的主营业务是什么  → 排序相同（标题加分未产生任何影响）
+查询：中级工程师的年薪范围  → 排序相同（标题加分未产生任何影响）</code></pre>
+<p><span class="hlr">4/4 完全一致</span>，实证了 P1-4：那套 ×2.0/×1.2 的标题加分逻辑，一次都没真正影响过排序结果。</p>
+
+<h3>0.3 MCU 查询实测：库里没有数据时的表现</h3>
+<pre><code>STM32 的 USART 波特率怎么算   → [核心技术方案|降级保障机制]  cos=0.3506
+GPIO 上拉输入怎么配置          → [核心技术方案|降级保障机制]  cos=0.3845
+如何配置外部中断               → [核心技术方案|降级保障机制]  cos=0.4638
+DMA 搬运数据的流程是什么        → [内部管理制度|项目管理流程]   cos=0.4149</code></pre>
+<p>四个 MCU 问题全部命中同一个无关 chunk（"降级保障机制"），cosine 全在 <span class="hlr">0.35–0.46</span> 区间 —— 远低于正确匹配的 0.71–0.75。这就是"库里没有 MCU 文档时的典型表现"：<b>系统不会说"不知道"，而是 confidently 抓一个最像的凑数，交给 LLM 编答案</b>。因为当前 prompt 里没有"资料未覆盖时必须说明"的约束，结果就是一本正经的胡说。</p>
+
+<h3>0.4 BGE query 前缀对照</h3>
+<p>BGE 系列模型官方要求查询侧加指令前缀 <code>"为这个句子生成表示以用于检索相关文章："</code>，但 <code>embedder.py:95-105</code> 的 <code>embed_query()</code> 没有加。实测影响：</p>
+<pre><code>查询：公司成立于哪一年
+  不加前缀（当前代码）→ top1 [年度财务报告|业绩预测]  cos=0.5170   ✗
+  加官方前缀          → top1 [公司简介|段落2]        cos=0.3546   ✓</code></pre>
+<p>加前缀后所有查询的 top1 相似度整体下降（0.52→0.35、0.75→0.63、0.74→0.57…），但<b>排序质量提升</b>：6 个查询中 top1 正确数从 <span class="hlr">5/6</span> 提升到 <span class="hlg">6/6</span>。相似度绝对值下降不影响检索（只用排序），但会影响阈值设定——若要加前缀，阈值需要重新校准。</p>
+
+<h2 id="s1">1. 实测：测试集与 MCU 定位错配</h2>
+
+<p>直接读取 <code>data/chroma_db/chroma.sqlite3</code>，当前 collection <code>mcu_qa</code> 的实际状态：</p>
+
+<div class="grid">
+  <div class="card"><div class="n" style="color:var(--red)">41</div><div class="l">总 chunk 数</div></div>
+  <div class="card"><div class="n" style="color:var(--red)">0</div><div class="l">MCU 相关 chunk</div></div>
+  <div class="card"><div class="n">768</div><div class="l">向量维度（正常）</div></div>
+  <div class="card"><div class="n" style="color:var(--orange)">13–37</div><div class="l">单 chunk token 数</div></div>
+</div>
+
+<table>
+<tr><th>doc_name</th><th>chunk 数</th><th>heading_number 样例</th><th>mcu_model</th><th>内容性质</th></tr>
+<tr><td>产品介绍</td><td>4</td><td>段落2 / 段落3…</td><td>（空）</td><td>企业假数据</td></tr>
+<tr><td>公司简介</td><td>5</td><td>段落2 / 段落3…</td><td>（空）</td><td>企业假数据</td></tr>
+<tr><td>内部管理制度</td><td>4</td><td>段落2 / 段落3…</td><td>（空）</td><td>权限测试假数据</td></tr>
+<tr><td>员工手册</td><td>4</td><td>段落2 / 段落3…</td><td>（空）</td><td>企业假数据</td></tr>
+<tr><td>大客户名单</td><td>4</td><td>段落2 / 段落3…</td><td>（空）</td><td>权限测试假数据（SECRET）</td></tr>
+<tr><td>年度财务报告</td><td>5</td><td>段落2 / 段落3…</td><td>（空）</td><td>权限测试假数据</td></tr>
+<tr><td>战略规划</td><td>5</td><td>段落2 / 段落3…</td><td>（空）</td><td>企业假数据</td></tr>
+<tr><td>核心技术方案</td><td>5</td><td>段落2 / 段落3…</td><td>（空）</td><td>企业假数据</td></tr>
+<tr><td>薪资结构</td><td>5</td><td>段落2 / 段落3…</td><td>（空）</td><td>权限测试假数据</td></tr>
+</table>
+
+<p>这 41 条全部来自 <code>data/batch_test/</code> 下用于<strong>密级权限测试</strong>的 9 个 txt 文件（文件名带 <code>_PUBLIC/_INTERNAL/_CONFIDENTIAL/_SECRET</code> 后缀）。内容形如：</p>
+
+<pre><code>## 产品功能列表
+1. 文档管理：支持PDF、Word、Markdown、TXT等多种格式
+2. 智能检索：支持语义检索、关键词检索、混合检索
+...</code></pre>
+
+<p><span class="hlr">结论：项目名称是 MCU RAG QA，但当前测试集是一整套企业知识库文档</span>（公司简介 / 产品 / 员工手册 / 财务 / 薪资 / 客户名单），没有任何一条 MCU / STM32 / 嵌入式技术文档。这带来一个必须分清的前提：</p>
+<ul style="margin:10px 0 10px 20px;color:var(--tx2)">
+<li><b>如果你问的是企业文档类问题</b>（"年假多少天""技术部预算多少"）→ 数据是对的，实测检索 top1 正确率约 5/6，<span class="hlg">检索不是瓶颈</span>。准确率低的原因要往生成环节和前置拦截找（见 P0-1 / P0-2 / P0-3）。</li>
+<li><b>如果你问的是 MCU 技术问题</b>（"USART 怎么配"）→ 库里根本没有对应文档，实测 4/4 全部召回无关 chunk（cos 仅 0.35–0.46），<span class="hlr">必然答非所问</span>。这不是算法问题，是数据缺失。</li>
+</ul>
+<p>建议先明确你评测时问的是哪一类。从"准确率总是很低"的描述看，很可能是后者——那第一步就得把真实的 MCU 文档（数据手册、参考手册、HAL 库说明）灌进库里，否则后面 16 项改完也不会有变化。</p>
+
+<p>附带两个次生问题：</p>
+<ul style="margin:10px 0 10px 20px;color:var(--tx2)">
+  <li><b>heading_number 全是"段落N"</b>（来自 <code>txt_reader.py:103</code>），不含任何语义 → 直接导致检索层的标题加分和海绵降权两个优化全部变成死代码（见 P1-4）。</li>
+  <li><b>mcu_model 全部为空</b>，且检索时也不做型号过滤 → 即使将来入库了 F103/F407/ESP32 多种芯片文档，也会混在一起检索，互相干扰。</li>
+</ul>
+
+<h2 id="s2">2. 一次请求要过的 5 道关卡</h2>
+
+<p>以下是一条用户问题从进入 API 到返回答案的完整路径，标注了每一关的实际状态：</p>
+
+<div class="flow">
+  <div class="step kill">
+    <div class="sn">1</div>
+    <div class="sc"><div class="st">提示词注入检测 <span class="badge p0">拦截</span></div>
+    <div class="sd"><code>routes.py:358</code> → <code>PromptInjectionDetector.analyze()</code>。命中 <strong>任意 1 条</strong>规则即拒绝。规则库包含 <code>新的.*?指令</code>、<code>你.*?模拟</code>、<code>内部.*?信息</code>、<code>你.*?原理</code>、<code>你.*?开发</code>、<code>act as</code>（忽略大小写）等 —— 全是 MCU 领域高频表达。</div></div>
+  </div>
+  <div class="step kill">
+    <div class="sn">2</div>
+    <div class="sc"><div class="st">兜底规则短路 <span class="badge p0">拦截</span></div>
+    <div class="sd"><code>routes.py:125</code>，在检索<strong>之前</strong>执行。<code>fallback_rules.json</code> 的 <code>law_scope</code> 规则 keywords 含 <code>"适用"</code> 且 mode=any → 任何含"适用"二字的问题直接返回《个人信息保护法》答案，完全不检索。</div></div>
+  </div>
+  <div class="step">
+    <div class="sn">3</div>
+    <div class="sc"><div class="st">答案缓存 <span class="badge p1">污染</span></div>
+    <div class="sd"><code>routes.py:379</code>。命中即返回，且返回的 <code>sources=[]</code>。降级产生的垃圾答案也会写入缓存并保留 1 小时。</div></div>
+  </div>
+  <div class="step">
+    <div class="sn">4</div>
+    <div class="sc"><div class="st">混合检索 <span class="badge p1">部分失效</span></div>
+    <div class="sd">稠密 + BM25 → RRF 融合。BM25 侧索引在进程内只构建一次，<strong>入库后不失效</strong>；标题加分/海绵降权因 heading 是"段落N"全部失效；boost_sparse 几乎恒为 True 使稠密检索被架空。</div></div>
+  </div>
+  <div class="step kill">
+    <div class="sn">5</div>
+    <div class="sc"><div class="st">LLM 生成 <span class="badge p0">必然失败</span></div>
+    <div class="sd">.env 中 <code>LLM_BASE_URL</code> 指向火山方舟、<code>LLM_MODEL</code> 是假 endpoint，而 <code>LLM_API_KEY</code> 被 settings 兜底替换成了 DeepSeek 的真实 key —— 用 A 厂的 key 打 B 厂的 endpoint，必然鉴权失败。且未配置备用模型 → 返回空 → 降级为原文拼接。</div></div>
+  </div>
+</div>
+
+<div class="warn">
+<strong>关键推论：</strong>关卡 5 失败后，<code>_llm_generate()</code> 走"原文片段"降级路径（<code>routes.py:318-326</code>），把检索到的前 3 条 chunk 原文拼一拼就返回，文案还是"相关法律条文如下："。也就是说 —— <span class="hlr">你当前看到的"答案"很可能根本不是 LLM 生成的，而是硬拼的原文片段</span>。而这个降级结果还会被写进缓存保存 1 小时。
+</div>
+
+<h2 id="s3">3. P0 致命问题</h2>
+
+<div class="issue crit">
+<h4><span class="badge p0">P0-1</span> LLM 配置自相矛盾，生成环节必然失败</h4>
+<div class="loc">.env:8-10 · config/settings.py:33-37 · app/access/routes.py:306-311</div>
+<p>.env 中的三项 LLM 配置分属两家厂商：</p>
+<pre><code>LLM_API_KEY=sk-your-real-api-key          # 占位符（21 字符）
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3   # 火山方舟
+LLM_MODEL=ep-20250101000000-xxxxx         # 火山方舟 endpoint，占位符</code></pre>
+<p><code>settings.py:33-37</code> 有一段兼容兜底：当 <code>LLM_API_KEY</code> 以 <code>sk-</code> 开头且长度 &lt; 30 时，用系统环境变量 <code>deepseek_api_key</code> 覆盖。实测该系统变量<strong>已设置</strong>（50 字符，真实 key），所以最终生效的是：</p>
+<pre><code>key     = DeepSeek 的真实 API Key     ← 来自系统环境变量
+base_url= https://ark.cn-beijing.volces.com/api/v3   ← 火山方舟
+model   = ep-20250101000000-xxxxx     ← 假的 endpoint id</code></pre>
+<p><b>影响：</b>用 DeepSeek 的 key 请求火山方舟的假 endpoint → 401/404 → <code>generate()</code> 抛异常 → 未配置 <code>LLM_FALLBACK_*</code> → 返回空字符串 → 走原文片段降级。<span class="hlr">用户拿到的永远是拼接的原文，不是生成答案。</span></p>
+</div>
+
+<div class="issue crit">
+<h4><span class="badge p0">P0-2</span> 兜底规则在检索前短路，含"适用"的问题直接返回个保法答案</h4>
+<div class="loc">app/access/routes.py:125-132 · config/fallback_rules.json:9-15</div>
+<pre><code># _qa_json() 的第一步，在 _retrieve() 之前
+fallback_rule = fallback_provider.match(question)
+if fallback_rule:
+    return QAResponse(answer=fallback_rule.answer, sources=[], ...)</code></pre>
+<p><code>fallback_rules.json</code> 中 <code>law_scope</code> 规则：</p>
+<pre><code>{"keywords": ["适用范围", "适用什么", "哪些情况", "适用"], "mode": "any"}</code></pre>
+<p><b>影响：</b>"STM32F103 <span class="hl">适用</span>的工作电压是多少？"、"这个芯片<span class="hl">适用</span>什么场景？" → 直接返回《中华人民共和国个人信息保护法》的适用范围条文，<span class="hlr">完全不经过检索和 LLM</span>。规则库整体也是法律领域残留，与 MCU 场景无关。</p>
+</div>
+
+<div class="issue crit">
+<h4><span class="badge p0">P0-3</span> 提示词注入检测命中 1 条即拦截，MCU 高频词大量误杀</h4>
+<div class="loc">app/generate/prompt_injection_detector.py:180-242 · app/access/routes.py:358-369</div>
+<pre><code>confidence = min(1.0, unique_patterns * 0.3)   # 命中1条 → 0.3
+return InjectionResult(detected=confidence >= self._threshold)  # 0.3 >= 0.3 → True</code></pre>
+<p><b>命中任意 1 条规则即拒绝回答。</b>而规则库里这些模式会误伤正常 MCU 提问：</p>
+<table>
+<tr><th>规则</th><th>被误杀的正常问题</th></tr>
+<tr><td><code>新的.*?指令</code></td><td>"Cortex-M4 的<span class="hl">新的指令</span>怎么用"（指令 = CPU 指令集）</td></tr>
+<tr><td><code>你.*?模拟</code></td><td>"<span class="hl">你能模拟</span>一下 I2C 时序吗"（模拟 I2C / 模拟信号）</td></tr>
+<tr><td><code>内部.*?信息</code></td><td>"查一下<span class="hl">内部</span>寄存器的<span class="hl">信息</span>"</td></tr>
+<tr><td><code>你.*?原理</code></td><td>"讲讲 ADC 采样的<span class="hl">原理</span>"</td></tr>
+<tr><td><code>你.*?开发</code></td><td>"<span class="hl">你支持</span>哪些<span class="hl">开发</span>板"</td></tr>
+<tr><td><code>act as</code> / <code>you are a</code></td><td>IGNORECASE，任何夹带英文的技术问题</td></tr>
+<tr><td><code>覆盖.*?指令</code> / <code>替换.*?指令</code></td><td>中断<span class="hl">覆盖指令</span>相关提问</td></tr>
+</table>
+<p><b>影响：</b>用户得到"抱歉，我无法回答这个问题。请<span class="hl">基于法律条文</span>提出合规的问题。"—— 拒绝话术本身也是法律领域的。</p>
+</div>
+
+<div class="issue crit">
+<h4><span class="badge p0">P0-4</span> 知识库中零 MCU 数据</h4>
+<div class="loc">data/chroma_db（实测）· data/batch_test/</div>
+<p>详见第 1 节。当前 41 条全是企业权限测试假数据。<b>任何 MCU 问题在当前库上都不可能召回正确文档</b>。这是所有优化的前置条件 —— 不解决这条，后面 16 项改完也不会有变化。</p>
+</div>
+
+<h2 id="s4">4. P1 检索与生成问题</h2>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-1</span> Prompt 全套法律领域串台</h4>
+<div class="loc">app/access/routes.py:205, 307 · app/access/app.py:30</div>
+<pre><code>system_prompt = "你是一个法律助手，基于以下法律条文回答用户问题。"
+user_prompt   = f"法律条文：\n{context}\n\n问题：{question}"
+# 降级文案："相关法律条文如下："
+# FastAPI description："RAG 问答 API，基于个人信息保护法 PDF"</code></pre>
+<p>MCU 场景应当改为嵌入式/STM32 领域专家角色，并加入"只依据给定资料回答，资料未覆盖时明确说明"的硬约束（当前 prompt 完全没有防幻觉约束）。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-2</span> 上下文硬截断 500 字，配置项的 4000 从未生效</h4>
+<div class="loc">app/access/routes.py:204, 306 · config/settings.py:87</div>
+<pre><code>context = "\n\n".join(f"[{h.meta.heading_number}]\n{h.content[:500]}" for h in hits)
+#                                                    ^^^^^^^^^^^^^^ 硬编码
+# settings.generate.context_max_chars = 4000  ← 定义了但没有任何代码读取</code></pre>
+<p>数据手册的一个章节常常超过 500 字，后半段（往往是配置步骤、寄存器表、注意事项）被直接砍掉。当前库里 chunk 只有 13–37 token 所以问题被掩盖，一旦换成真实 MCU 文档就会成为主要瓶颈。另外拼接时只给了 heading_number（"段落N"），<span class="hl">没有给文档名、型号、页码</span>，LLM 无法判断来源可信度。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-3</span> 所有检索参数配置在代码里都没被读取，调参完全无效</h4>
+<div class="loc">config/settings.py:74-98 · app/index/embedder.py:71 · app/access/app.py:76</div>
+<table>
+<tr><th>配置项</th><th>默认值</th><th>代码实际使用的值</th></tr>
+<tr><td><code>RETRIEVAL_TOP_K</code></td><td>18</td><td><code>routes.py</code> 用 <code>req.top_k</code> 默认 <span class="hl">5</span></td></tr>
+<tr><td><code>RETRIEVAL_RRF_K</code></td><td>60</td><td><code>HybridRetriever.__init__</code> 默认 <span class="hl">5</span></td></tr>
+<tr><td><code>RETRIEVAL_DENSE_WEIGHT</code> / <code>SPARSE_WEIGHT</code></td><td>0.5 / 0.5</td><td><code>_rrf_fuse</code> 硬编码 <span class="hl">1.0 / 2.0 或 5.0</span></td></tr>
+<tr><td><code>GENERATE_CONTEXT_MAX_CHARS</code></td><td>4000</td><td>硬编码 <span class="hl">500</span>（每 chunk）</td></tr>
+<tr><td><code>CHUNK_MAX_CHARS</code> / <code>CHUNK_OVERLAP</code></td><td>200 / 20</td><td>三个 reader 均未读取</td></tr>
+<tr><td><code>EMBEDDING_MODEL</code></td><td>BAAI/bge-m3</td><td><code>SentenceEmbedder()</code> <span class="hl">不传参</span>，恒用 bge-base-zh-v1.5</td></tr>
+</table>
+<p><b>影响：</b>你在 .env 里改任何检索相关参数都不会生效。<span class="hlr">这直接解释了"调了很久准确率没变化"。</span></p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-4</span> 标题加分与关键词海绵降权是死代码</h4>
+<div class="loc">app/retrieve/hybrid.py:141-174, 224-233</div>
+<pre><code>heading = c.meta.heading_number or ""          # "段落2" / "第12页-段3"
+title_boost = self._title_matches_query(heading, query_tokens)   # 永远 1.0
+penalty     = self._overview_penalty(heading)                    # 永远 1.0</code></pre>
+<ul>
+<li><code>_title_matches_query</code> 在 heading 里找查询词。heading 是 <code>"段落2"</code> 或 <code>"第12页-段3"</code>（pdf_reader:177），不可能命中 <code>"USART"</code> → <b>永远返回 1.0，×2.0/×1.2 的加分逻辑从未生效</b>。</li>
+<li><code>_overview_penalty</code> 在 heading 里找 "总则/前言/组织实施/保障措施"。这些词对 MCU 数据手册本就不存在 → <b>永远返回 1.0，×0.2/×0.5 的降权也从未生效</b>。</li>
+</ul>
+<p>这两个是被精心调整过、并在注释里反复说明的优化，实际上一次都没跑起来。<b>根因是入库侧把位置编号写进了 heading_number，而检索侧把它当语义标题用。</b></p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-5</span> boost_sparse 几乎恒为 True，稠密检索被架空</h4>
+<div class="loc">app/retrieve/query_understanding.py:114-128 · app/retrieve/hybrid.py:347</div>
+<pre><code>if intent.has_clause_number or intent.has_chapter_number \
+   or intent.is_how_to or intent.is_definition or intent.has_topic_keyword:
+    intent.boost_sparse = True
+
+# is_how_to     = bool(re.search(r"(如何|怎样|怎么)", query))
+# is_definition = bool(re.search(r"(什么是|是什么|的定义)", query))
+# has_topic_keyword = 命中 ["数据","技术","应用","产品","服务","平台","模型","算法","标准","安全", ...]</code></pre>
+<p><b>实测触发率：</b>在上述 6 条企业文档查询中命中 2 条（"…<span class="hl">是什么</span>"、"<span class="hl">技术</span>部的…"），约 <b>3 成</b>；MCU 技术提问里"如何/怎么"占比更高，真实场景会更高。</p>
+<pre><code>sparse_weight = 5.0 if boost_sparse else 2.0   # 触发时 5.0，未触发也已是 2.0</code></pre>
+<p><b>为什么方向反了：</b>第 0 节实测显示 —— <b>稠密检索其实比 BM25 更准</b>（稠密 top1 正确 5/6，且在"公司有哪些大客户"上稠密对、BM25 错）。而代码里稠密权重固定 1.0，稀疏默认就是 2.0、触发时 5.0：<span class="hlr">把实测更准的那一路压到了 1/2 甚至 1/5 的权重</span>。再叠加 BM25 不区分大小写（P1-6），等于让一个更弱、且对英文术语完全失效的通道主导最终排序。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-6</span> BM25 无大小写归一化与英文术语处理</h4>
+<div class="loc">app/retrieve/hybrid.py:199, 211, 167</div>
+<pre><code>tokens = list(jieba.lcut(text))          # 不做 .lower()
+query_tokens = list(jieba.lcut(query))   # 不做 .lower()，不过滤停用词
+...
+if token in heading:                     # 大小写敏感的子串匹配</code></pre>
+<p>MCU 领域术语基本都是英文且大小写混用（<code>USART / usart / Usart</code>、<code>GPIO / gpio</code>、<code>I2C / i2c</code>）。用户问"usart 波特率"，文档写"USART 波特率" → 分词结果不同 → <span class="hlr">BM25 得分为 0，该 chunk 直接落选</span>。鉴于 P1-5 让 BM25 权重占 5.0，这个问题被放大成了主召回通道的致命伤。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-7</span> BM25 索引入库后不失效，新文档检索不到</h4>
+<div class="loc">app/retrieve/hybrid.py:176-205 · app/access/routes.py:33, 267-270</div>
+<pre><code># hybrid.py
+def _ensure_bm25(self):
+    if self._bm25_ready:      # ← 一旦建好，永不重建
+        return
+
+# routes.py
+_retriever_instance = None   # 全局单例，进程内只创建一次
+if _retriever_instance is None:
+    _retriever_instance = HybridRetriever(...)</code></pre>
+<p>BM25 索引在首次查询时从 Chroma 快照构建，之后常驻内存。<strong>通过 /ingest 入库的新文档只进了 Chroma（稠密），BM25 索引仍是旧的</strong>，必须重启服务才生效（项目里存在 <code>scripts/rebuild_bm25.py</code> 说明作者知道这点，但服务运行时没有失效机制）。叠加 P1-5 的 BM25 权重 5.0，新入库的 MCU 文档在检索结果里几乎排不上号。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-8</span> 没有 reranker，rerank_score 名不副实</h4>
+<div class="loc">app/contracts.py:346-352 · app/retrieve/hybrid.py:370</div>
+<p><code>contracts.py</code> 定义了 <code>Reranker</code> Protocol 但<strong>没有任何实现</strong>。<code>hybrid.py:370</code> 把 RRF 融合分数塞进了 <code>rerank_score</code> 字段，命名上容易让人误以为做过 cross-encoder 重排。RRF 只用排名不用分数，对"相关文档排在第 11 名"这类情况无能为力。混合检索在小语料上的精度天花板，通常就卡在缺 rerank 这一层。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-9</span> 最终分数阈值 0.1 形同虚设；dense_score 语义是反的</h4>
+<div class="loc">app/access/routes.py:137 · app/index/chroma_repo.py:115 · app/contracts.py:119-124</div>
+<pre><code># RRF k=5：只命中稠密第1名 → 1/(5+1) = 0.167 > 0.1 → 通过
+#          只命中稀疏第1名 → 5.0/(5+1) = 0.833 > 0.1 → 通过
+hits = [h for h in hits if h.final_score > 0.1]</code></pre>
+<p>阈值只能勉强过滤掉稠密排名 ≥6 且无稀疏命中的尾部项，对 top-5 结果基本不起作用。</p>
+<pre><code># chroma_repo.py — collection 配置 hnsw:space="cosine"，返回的是 cosine distance
+dense_score = results["distances"][0][i]   # 0=最相似，2=最不相似，越小越好</code></pre>
+<p>但 <code>final_score</code> 里 <code>max(dense_score, sparse_score)</code> 把它当"越大越好"用。<b>排序本身没受影响</b>（Chroma 已按距离升序返回），但你在调试面板上看到的 dense_score 数值方向是反的，会严重误导排查。当前因为 rerank_score 恒 &gt; 0 走不到这个分支，问题被掩盖。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-10</span> BGE 查询缺少官方指令前缀</h4>
+<div class="loc">app/index/embedder.py:95-105</div>
+<pre><code>def embed_query(self, query: str) -&gt; List[float]:
+    embedding = self._model.encode(query, normalize_embeddings=True)
+    #                              ^^^^^ 没有加 "为这个句子生成表示以用于检索相关文章："</code></pre>
+<p>BAAI/bge 系列是非对称模型：入库文本不加前缀，查询文本<strong>必须</strong>加指令前缀。实测（第 0.4 节）显示，加前缀后 top1 正确率从 5/6 提升到 6/6，"公司成立于哪一年"这条从错误的"年度财务报告"纠正为正确的"公司简介"。</p>
+<p class="hlg">注意：加前缀后相似度绝对值会整体下降（0.75→0.63 等），这是正常的，但意味着阈值要重新校准。</p>
+</div>
+
+<div class="issue major">
+<h4><span class="badge p1">P1-11</span> 没有"无相关文档"判定，系统不会说不知道</h4>
+<div class="loc">app/access/routes.py:137-139, 306-311</div>
+<p>实测数据给出了一个非常干净的判据：</p>
+<table>
+<tr><th>场景</th><th>cosine 相似度</th></tr>
+<tr><td>正确匹配（员工手册·休假制度 / 薪资结构·岗位薪资范围…）</td><td class="ok">0.71 – 0.75</td></tr>
+<tr><td>凑数匹配（MCU 问题命中"降级保障机制"）</td><td style="color:var(--red)">0.35 – 0.46</td></tr>
+</table>
+<p>区分度极大。但代码里唯一的过滤是 <code>final_score &gt; 0.1</code>（RRF 分数，与相似度无关，见 P1-9），<span class="hlr">起不到任何"拒答"作用</span>；prompt 里也没有"资料未覆盖时必须说明"的约束。结果是：问 MCU 问题 → 抓到 0.35 相似度的无关 chunk → LLM 基于它编一个听起来合理的答案。<b>这是"准确率低"最直接的来源之一。</b></p>
+</div>
+
+<h2 id="s5">5. P2 工程与可维护性问题</h2>
+
+<div class="issue minor">
+<h4><span class="badge p2">P2-1</span> 降级产生的答案被写入缓存，污染 1 小时</h4>
+<div class="loc">app/access/routes.py:145-149</div>
+<pre><code>answer = await _llm_generate(...)   # 失败时返回的是拼接原文
+if answer:
+    answer_cache.set(question, tenant, clearance, answer, ttl=3600)</code></pre>
+<p>只要 answer 非空就缓存，不区分是 LLM 生成还是降级产物。一旦某次 LLM 调用失败，接下来 1 小时内同样的问题都返回那次垃圾答案。<b>建议：降级结果不写缓存，或显著缩短 TTL。</b></p>
+</div>
+
+<div class="issue minor">
+<h4><span class="badge p2">P2-2</span> 缓存命中丢失 sources，且"语义近似检测"未实现</h4>
+<div class="loc">app/access/routes.py:396-400 · app/cross/answer_cache.py:1-6, 55-57</div>
+<pre><code>return QAResponse(answer=cached_answer, sources=[], request_id=request_id)
+#                                       ^^^^^^^^^^^ 来源丢失
+
+# answer_cache.py 类注释写着："语义近似检测：相似问题命中缓存（编辑距离）"
+# 实际 _make_key 是 md5(纯文本)，只做精确匹配 —— 该功能从未实现</code></pre>
+</div>
+
+<div class="issue minor">
+<h4><span class="badge p2">P2-3</span> Markdown 入库默认跳过全部代码块</h4>
+<div class="loc">app/ingest/markdown_reader.py:42, 76-81</div>
+<pre><code>def __init__(self, skip_code_blocks: bool = True, ...):
+...
+if stripped.startswith("```"):
+    in_code_block = not in_code_block
+    continue
+if in_code_block:
+    continue          # ← 代码块内容全部丢弃</code></pre>
+<p>对一般技术文档这能减少噪声，但对 MCU 场景是灾难：<span class="hlr">初始化代码、寄存器配置、时钟树配置片段恰恰是最常被问到的内容</span>（"USART 初始化代码怎么写" → 答案就在代码块里，而代码块根本没入库）。<code>ingest_file_task</code> 调用 <code>ReaderFactory</code> 时用的是默认参数，无法关闭。</p>
+</div>
+
+<div class="issue minor">
+<h4><span class="badge p2">P2-4</span> chunk_index 恒为 0，序列号与去重键退化</h4>
+<div class="loc">markdown_reader.py:162 · pdf_reader.py:282 · word_reader.py</div>
+<pre><code>chunk_index=0,     # 三个 reader 全部硬编码为 0</code></pre>
+<p>去重键是 <code>(doc_id, heading_number, chunk_index)</code>。chunk_index 恒 0 意味着：<b>同一文档下若出现两个同名标题（如两个"## 概述"），后一个 chunk 会在 <code>get_all_chunks()</code> 和 <code>search()</code> 的 dedup 中被静默丢弃</b>，且被丢弃时没有任何日志。同时 chunk 在文档中的先后顺序信息彻底丢失，LLM 上下文只能按 RRF 分数排列，无法还原原文顺序。</p>
+</div>
+
+<h2 id="s6">6. 修复方案：三批落地</h2>
+
+<h3>第一批 · 止血（约 1–2 小时，不动架构）</h3>
+
+<div class="fix">
+<h4>① 对齐 LLM 配置</h4>
+<div class="why">决定"你看到的到底是生成答案还是拼接原文"，优先级最高。</div>
+<pre><code># .env —— base_url / model / key 三者必须同属一家厂商
+# 方案A（用 DeepSeek）：
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
+LLM_API_KEY=sk-&lt;你的 deepseek 真实 key&gt;
+
+# 方案B（用火山方舟）：
+LLM_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+LLM_MODEL=ep-&lt;你真实的 endpoint id&gt;
+LLM_API_KEY=&lt;方舟的真实 key&gt;</code></pre>
+<p>同时建议给 <code>LLM_FALLBACK_*</code> 配上第二家厂商，主备切换链路才真正可用。</p>
+</div>
+
+<div class="fix">
+<h4>② 清空法律领域残留</h4>
+<div class="why">三处一行改动，立刻消除答非所问与误拒答。</div>
+<pre><code># config/fallback_rules.json —— 删掉两条法律规则，只保留通用兜底
+# 或在 _qa_json 中把 fallback 匹配移到检索失败之后（它本该是"降级"而非"前置"）
+
+# app/generate/prompt_injection_detector.py
+confidence = min(1.0, unique_patterns * 0.3)
+# 改为：单条命中不拦截，且剔除 MCU 领域高频词
+#   - 删除 新的.*?指令 / 覆盖.*?指令 / 替换.*?指令 / 更新.*?规则
+#   - 删除 你.*?模拟 / 你.*?原理 / 你.*?开发 / 你.*?版本 / 你.*?模型
+#   - 删除 内部.*?信息 / act as / you are a
+#   - 阈值提到 0.6（即至少命中 2 条）</code></pre>
+</div>
+
+<div class="fix">
+<h4>③ 换成 MCU 领域 prompt</h4>
+<pre><code>system_prompt = (
+    "你是一个嵌入式系统（STM32/MCU）技术助手。"
+    "只能依据下面提供的资料作答，不得臆测。"
+    "如果资料中没有答案，必须明确说明'资料中未提及'，"
+    "不要编造寄存器名、函数名或参数值。"
+    "回答时注明所依据的资料出处。"
+)
+user_prompt = (
+    f"参考资料：\n{context}\n\n"
+    f"问题：{question}\n\n"
+    f"请基于上述资料回答，并注明依据。"
+)</code></pre>
+</div>
+
+<div class="fix">
+<h4>④ 入库真实 MCU 文档 + 重建 BM25</h4>
+<div class="why">不解决"库里没有 MCU 数据"，后面所有优化都不会有效果。</div>
+<pre><code>python scripts/rebuild_bm25.py     # 或直接重启服务让 BM25 重新快照</code></pre>
+<p>另外建议先清空 41 条测试假数据（<code>delete_by_doc_id</code> 或删庫重灌），避免它们干扰后续评测。</p>
+</div>
+
+<h3>第二批 · 检索质量（约半天）</h3>
+
+<div class="fix">
+<h4>⑤ 把配置真正接进代码</h4>
+<div class="why">否则以后调参依然是无效的。</div>
+<pre><code># app/access/app.py
+_embedder = SentenceEmbedder(model_name=settings.embedding.model,
+                             device=settings.embedding.device)
+
+# app/access/routes.py
+retriever = HybridRetriever(repo=repo, embedder=embedder,
+                            rrf_k=settings.retrieval.rrf_k)
+
+# _llm_generate / _qa_stream 中按 context_max_chars 动态拼接，而非固定 500</code></pre>
+</div>
+
+<div class="fix">
+<h4>⑥ BM25 归一化 + 英文术语保护</h4>
+<pre><code>import re
+_TERM = re.compile(r"[A-Za-z][A-Za-z0-9_]*")   # 英文术语整体保留
+
+def tokenize(text: str):
+    terms = _TERM.findall(text)
+    words = [t for t in jieba.lcut(text) if t.strip() and len(t) &gt; 1]
+    return [t.lower() for t in terms] + [w.lower() for w in words]
+
+# _ensure_bm25 与 _bm25_search 都改用 tokenize()
+# 另建议开启 jieba 用户词典，加入 USART GPIO DMA NVIC SPI I2C ADC TIM ...</code></pre>
+</div>
+
+<div class="fix">
+<h4>⑦ 让标题加分真正生效</h4>
+<pre><code># 检索侧：改用 heading_title（或在 heading 为空时回退到 content 首行）
+heading = c.meta.heading_title or c.meta.heading_number or ""
+
+# 入库侧（更重要）：把语义标题写进 heading_title
+#   markdown_reader.py:161  heading_title=heading_number  ← 目前两者相同
+#   pdf_reader.py:279       heading_title=heading_number  ← "第12页-段3"
+# 建议 pdf/word 提取真实章节标题写入 heading_title，
+# heading_number 只存编号（如 "3.2.1"）</code></pre>
+</div>
+
+<div class="fix">
+<h4>⑧ 收窄 boost_sparse 触发条件</h4>
+<pre><code># 只对"确实需要精确匹配"的查询提权，去掉 is_definition / has_topic_keyword
+if intent.has_clause_number or intent.has_chapter_number:
+    intent.boost_sparse = True
+# 并把默认 sparse_weight 从 2.0 降到 1.0（让稠密与稀疏等权起步）
+# 待接入 reranker 后，建议直接用 rerank 结果替代 RRF 加权</code></pre>
+</div>
+
+<div class="fix">
+<h4>⑨ 入库后让 BM25 失效</h4>
+<pre><code># 方案：给 HybridRetriever 加版本号，入库任务完成后递增
+#   简单做法：ingest_file_task 成功后调用 retriever.invalidate()
+def invalidate(self):
+    self._bm25 = None
+    self._bm25_chunks = []
+    self._bm25_ready = False</code></pre>
+</div>
+
+<div class="fix">
+<h4>⑩ 给 BGE 查询加官方指令前缀</h4>
+<div class="why">实测能让 top1 正确率从 5/6 提升到 6/6，改动只有一行。</div>
+<pre><code># app/index/embedder.py
+BGE_QUERY_PREFIX = "为这个句子生成表示以用于检索相关文章："
+
+def embed_query(self, query: str) -&gt; List[float]:
+    if not query:
+        return []
+    embedding = self._model.encode(BGE_QUERY_PREFIX + query,
+                                   normalize_embeddings=True)
+    ...</code></pre>
+<p><b>重要：</b>改完后必须<strong>重新校准所有阈值</strong>（相似度绝对值会下降约 0.1–0.2），且入库侧 <code>embed_texts</code> <span class="hlr">不要加</span>前缀 —— BGE 是非对称的，只有 query 侧加。</p>
+</div>
+
+<div class="fix">
+<h4>⑪ 用 cosine 阈值实现"拒答"，别让系统硬编</h4>
+<div class="why">实测：正确匹配 cos≈0.71–0.75，凑数匹配 cos≈0.35–0.46。设一条阈值就能挡掉大部分幻觉。</div>
+<pre><code># 在 _retrieve 之后、_llm_generate 之前加一道门槛
+# 注意：先修正 dense_score 的符号（Chroma 返回的是 distance）
+sim = 1.0 - h.dense_score          # cosine distance → cosine similarity
+
+RELEVANCE_THRESHOLD = 0.55         # 建议先用 0.55，再用评测集调
+hits = [h for h in hits if (1.0 - h.dense_score) &gt;= RELEVANCE_THRESHOLD]
+
+if not hits:
+    return QAResponse(
+        answer="资料中没有找到相关内容，请换个说法或补充具体型号。",
+        sources=[], request_id=request_id)</code></pre>
+<p>配合第一批的 prompt 改造（"资料未覆盖时必须明确说明"），双保险。这一条对"问 MCU 问题得到一本正经的错误答案"的改善最直接。</p>
+</div>
+
+<h3>第三批 · 入库质量（1–2 天，决定召回率上限）</h3>
+
+<div class="fix">
+<h4>⑫ 按语义重新分块，并提取 mcu_model</h4>
+<ul style="margin:10px 0 0 20px;color:var(--tx2)">
+<li><b>chunk_index 必须递增</b>，恢复顺序信息，避免 dedup 误删。</li>
+<li><b>Markdown 入库时保留代码块</b>（<code>skip_code_blocks=False</code>），代码是 MCU 问答的核心答案来源。</li>
+<li><b>从文件名/正文提取 mcu_model</b>（正则匹配 <code>STM32F\d{3}</code>、<code>ESP32</code>、<code>GD32</code> 等），并在 <code>_build_where</code> 中支持按型号过滤 —— 否则 F103 和 F407 的文档会互相污染。</li>
+<li><b>chunk 大小</b>：当前 13–37 token 过碎，建议目标 256–512 token，重叠 15%。数据手册可按"章节 + 表格完整保留"切分，避免把寄存器表从中间劈开。</li>
+</ul>
+</div>
+
+<div class="fix">
+<h4>⑬ 补上 reranker（contracts 里已预留接口）</h4>
+<div class="why">这是混合检索精度提升最明显的一步，通常能带来两位数的 Top-1 准确率改善。</div>
+<pre><code>from sentence_transformers import CrossEncoder
+# 中文可用 BAAI/bge-reranker-base 或 bce-reranker-base_v1
+
+class BgeReranker:
+    def rerank(self, query, hits, top_n=5):
+        pairs = [(query, h.content) for h in hits]
+        scores = self._model.predict(pairs)
+        ranked = sorted(zip(scores, hits), key=lambda x: -x[0])
+        return [Hit(..., rerank_score=float(s)) for s, h in ranked[:top_n]]
+
+# 用法：RRF 先取 top_k*3 候选 → rerank → 取 top_k</code></pre>
+</div>
+
+<h2 id="s7">7. 验证方法</h2>
+
+<p>修改前先建立基线，否则无法判断改动是否真的有效：</p>
+
+<h3>Step 1 · 建评测集</h3>
+<p>准备 30–50 条问题及标准答案（或至少标注"正确答案应出自哪个文档的哪个章节"）。<b>务必先确定评测口径</b>：</p>
+<div>
+<span class="tag">口径A：企业文档问答（当前库内数据，可直接测）</span>
+<span class="tag">口径B：MCU 技术问答（需先灌入真实数据手册）</span>
+</div>
+<p style="margin-top:10px">每类覆盖四种题型：</p>
+<div>
+<span class="tag">术语定义（什么是 DMA）</span>
+<span class="tag">参数查询（USART_BRR 怎么算 / 技术部预算多少）</span>
+<span class="tag">操作步骤（如何配置外部中断）</span>
+<span class="tag">列举型（公司有哪些大客户 / F103 有几个 USART）</span>
+</div>
+<p style="margin-top:10px">本次实测中<b>唯一失败的两种题型就是"列举型"和"成立时间这类 buried 事实"</b>，建议重点覆盖。</p>
+
+<h3>Step 2 · 分层打点</h3>
+<pre><code># 在 routes.py 各关卡加日志，确认请求到底死在哪一步
+logger.info("stage=injection detected=%s", injection.detected)
+logger.info("stage=fallback matched=%s", fallback_rule is not None)
+logger.info("stage=cache hit=%s", cached_answer is not None)
+logger.info("stage=retrieve dense=%d sparse=%d fused=%d",
+            len(dense_hits), len(sparse_hits), len(hits))
+logger.info("stage=llm answer_len=%d is_fallback=%s", len(answer), is_raw)</code></pre>
+
+<h3>Step 3 · 区分"召回到了"还是"生成错了"</h3>
+<p>每次问答打印命中 chunk 的 heading + doc_name + 分数。<b>如果正确答案不在 top-5 里 → 检索问题；如果在 top-5 里但答案错了 → prompt / 截断 / LLM 问题。</b>这两类问题的修复方向完全不同，先分清再动手。</p>
+
+<h3>Step 4 · 关键指标</h3>
+<table>
+<tr><th>指标</th><th>含义</th><th>当前状态</th></tr>
+<tr><td>Recall@1（BM25）</td><td>BM25 top1 命中比例</td><td><b>实测 5/6（83%）</b>——失败于"公司有哪些大客户"</td></tr>
+<tr><td>Recall@1（稠密）</td><td>BGE top1 命中比例</td><td><b>实测 5/6（83%）</b>——失败于"公司成立于哪一年"<br>加 query 前缀后 <b>6/6</b></td></tr>
+<tr><td>MCU 查询召回率</td><td>MCU 问题能否召回到相关文档</td><td style="color:var(--red)"><b>0%</b>（4/4 命中无关 chunk）</td></tr>
+<tr><td>拦截率</td><td>被注入检测/兜底规则挡掉的比例</td><td>需实测，预计偏高</td></tr>
+<tr><td>LLM 成功率</td><td>非降级答案占比</td><td><span class="hlr">当前为 0（配置矛盾必失败）</span></td></tr>
+<tr><td>答案可溯源性</td><td>答案能对应到具体 chunk</td><td>缓存命中时 sources 为空</td></tr>
+</table>
+
+<footer>
+报告基于 <code>E:\trae\cede\mcu-rag-qa-v2</code> 静态代码审查、<code>chroma.sqlite3</code> 实测，以及用你提供的 9 个测试文档复现 <code>hybrid.py</code> BM25 逻辑 + 真实 BGE-base-zh-v1.5 稠密检索的对照实验。<br>
+复现脚本：<code>retrieval_probe.py</code>（BM25 侧）、<code>dense_probe.py</code>（稠密侧），可重复运行。<br>
+未启动 API 服务，也未调用 LLM；LLM 相关结论由配置与代码路径推导，建议按第 7 节打点复验。
+</footer>
+
+</div>
+</body>
+</html>

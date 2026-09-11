@@ -1,0 +1,55 @@
+# ===== 敏感信息（禁止提交）=====
+.env
+.env.local
+.env.*.local
+
+# ===== Python 虚拟环境 & 缓存 =====
+.venv
+venv
+__pycache__
+**/__pycache__
+*.py[cod]
+*$py.class
+*.so
+*.egg-info
+
+# ===== 运行时数据（二进制文件）=====
+data/chroma_db/
+data/logs/
+data/models/
+# 运行时数据库：任何 .db / .sqlite3 及其 WAL/SHM 边车文件都不入库
+# （原先只挡了 data/structured.db，漏掉 app.db / data/app.db / data/mcu.db
+#   以及 structured.db-wal 这类边车文件）
+*.db
+*.db-wal
+*.db-shm
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+
+# ===== 临时 / 测试残留文件 =====
+tmp_body.json
+test_request.json
+test_ingest.json
+
+# ===== IDE 配置 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ===== 测试缓存 =====
+.pytest_cache/
+coverage/
+htmlcov/
+.coverage
+.coverage.*
+
+# ===== OS 文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== TRAE / WorkBuddy 配置 =====
+.trae/
+.trae_job_data/
+.workbuddy/

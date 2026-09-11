@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCU RAG QA · 检索诊断控制台</title>
+<style>
+:root{
+  --bg:#0f1117; --panel:#1a1d29; --panel2:#252836; --panel3:#2e3242;
+  --border:#3a3d4a; --text:#e0e0e0; --muted:#8b95a7; --dim:#5f6878;
+  --accent:#4fc3f7; --green:#81c784; --red:#ef5350; --orange:#ffb74d; --purple:#b39ddb;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;overflow:hidden}
+code,pre,.mono{font-family:"Cascadia Code",Consolas,"Courier New",monospace}
+
+/* ---------- 布局 ---------- */
+.app{display:flex;height:100vh}
+.side{width:190px;flex:0 0 190px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.brand{padding:18px 16px;border-bottom:1px solid var(--border)}
+.brand h1{font-size:15px;font-weight:700;letter-spacing:.3px}
+.brand p{font-size:11px;color:var(--dim);margin-top:3px}
+.nav{flex:1;padding:10px 8px;overflow-y:auto}
+.nav button{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:3px;
+  background:none;border:none;border-radius:7px;color:var(--muted);font-size:13.5px;cursor:pointer;text-align:left;transition:.15s}
+.nav button:hover{background:var(--panel2);color:var(--text)}
+.nav button.on{background:var(--panel3);color:var(--accent);font-weight:600}
+.nav button .ico{width:18px;text-align:center;font-size:14px}
+.nav button .cnt{margin-left:auto;font-size:11px;color:var(--dim);background:var(--panel3);padding:1px 6px;border-radius:9px}
+.side-foot{padding:12px;border-top:1px solid var(--border);font-size:11px;color:var(--dim)}
+
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:52px;flex:0 0 52px;border-bottom:1px solid var(--border);background:var(--panel);
+  display:flex;align-items:center;gap:14px;padding:0 18px}
+.topbar .t{font-size:15px;font-weight:650}
+.topbar .sp{flex:1}
+.field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.field select,.field input{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:5px 8px;border-radius:6px;font-size:12px;outline:none}
+.field select:focus,.field input:focus{border-color:var(--accent)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);display:inline-block}
+.dot.on{background:var(--green);box-shadow:0 0 6px rgba(129,199,132,.6)}
+.dot.off{background:var(--red)}
+.dot.warn{background:var(--orange)}
+
+.view{flex:1;overflow-y:auto;padding:20px 22px;display:none}
+.view.on{display:block}
+.view.pad0{padding:0;display:none;flex-direction:column}
+.view.pad0.on{display:flex}
+
+/* ---------- 问答 ---------- */
+.chat{flex:1;overflow-y:auto;padding:22px 26px}
+.msg{margin-bottom:22px;max-width:900px}
+.msg .who{font-size:11px;color:var(--dim);margin-bottom:6px;letter-spacing:.5px}
+.bubble{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:13px 16px}
+.msg.me .bubble{background:#1b3a4a;border-color:#2c5a6e}
+.bubble.md h1,.bubble.md h2,.bubble.md h3{margin:10px 0 6px;font-size:15px}
+.bubble.md p{margin-bottom:8px}
+.bubble.md ul,.bubble.md ol{margin:0 0 8px 20px}
+.bubble.md li{margin-bottom:3px}
+.bubble.md pre{background:#0a0c12;border:1px solid var(--border);border-radius:7px;padding:11px;
+  overflow-x:auto;margin:9px 0;font-size:12.5px;line-height:1.55}
+.bubble.md code{background:var(--panel3);padding:1px 5px;border-radius:4px;font-size:12.5px}
+.bubble.md pre code{background:none;padding:0}
+.bubble.md table{border-collapse:collapse;margin:8px 0;font-size:13px}
+.bubble.md th,.bubble.md td{border:1px solid var(--border);padding:5px 9px}
+
+.diag{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+.tag{font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid var(--border);color:var(--muted);background:var(--panel2)}
+.tag.ok{color:var(--green);border-color:rgba(129,199,132,.4);background:rgba(129,199,132,.1)}
+.tag.bad{color:var(--red);border-color:rgba(239,83,80,.4);background:rgba(239,83,80,.1)}
+.tag.warn{color:var(--orange);border-color:rgba(255,183,77,.4);background:rgba(255,183,77,.1)}
+.tag.info{color:var(--accent);border-color:rgba(79,195,247,.4);background:rgba(79,195,247,.1)}
+
+.srcs{margin-top:12px;border-top:1px dashed var(--border);padding-top:11px}
+.srcs .h{font-size:11.5px;color:var(--dim);margin-bottom:8px;letter-spacing:.5px}
+.src{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:7px;cursor:pointer}
+.src:hover{border-color:var(--accent)}
+.src .r1{display:flex;align-items:center;gap:8px;font-size:12.5px}
+.src .rk{width:18px;height:18px;flex:0 0 18px;border-radius:4px;background:var(--panel3);
+  display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted)}
+.src .dn{font-weight:600;color:var(--text)}
+.src .hd{color:var(--muted);font-size:11.5px}
+.src .sc{margin-left:auto;font-size:11.5px;font-weight:600;font-family:Consolas,monospace}
+.bar{height:3px;background:var(--panel3);border-radius:2px;margin-top:7px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px}
+.src .body{display:none;margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
+  font-size:12.5px;color:var(--muted);white-space:pre-wrap;line-height:1.65;max-height:280px;overflow-y:auto}
+.src.open .body{display:block}
+
+.acts{display:flex;gap:7px;margin-top:11px;align-items:center}
+.btn{background:var(--panel2);border:1px solid var(--border);color:var(--muted);padding:4px 11px;
+  border-radius:6px;font-size:12px;cursor:pointer;transition:.15s}
+.btn:hover{border-color:var(--accent);color:var(--text)}
+.btn.up.on{color:var(--green);border-color:var(--green);background:rgba(129,199,132,.12)}
+.btn.down.on{color:var(--red);border-color:var(--red);background:rgba(239,83,80,.12)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#06202b;font-weight:600}
+.btn.pri:hover{filter:brightness(1.1);color:#06202b}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.composer{border-top:1px solid var(--border);background:var(--panel);padding:13px 22px;flex:0 0 auto}
+.composer .row{display:flex;gap:10px;align-items:flex-end}
+.composer textarea{flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  border-radius:9px;padding:10px 13px;font:inherit;font-size:13.5px;resize:none;outline:none;min-height:42px;max-height:180px}
+.composer textarea:focus{border-color:var(--accent)}
+.composer .opt{display:flex;gap:12px;margin-top:9px;font-size:11.5px;color:var(--muted);align-items:center;flex-wrap:wrap}
+.composer .opt label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.composer .opt input[type=range]{width:88px;accent-color:var(--accent)}
+
+/* ---------- 通用组件 ---------- */
+.hd{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.hd h2{font-size:17px;font-weight:650}
+.hd .sp{flex:1}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:11px;margin-bottom:18px}
+.stat{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.stat .n{font-size:23px;font-weight:700;letter-spacing:-.5px}
+.stat .l{font-size:11.5px;color:var(--dim);margin-top:2px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+.card h3{font-size:14px;font-weight:650;margin-bottom:11px}
+table.tb{width:100%;border-collapse:collapse;font-size:12.5px}
+table.tb th{background:var(--panel2);text-align:left;padding:9px 11px;color:var(--muted);font-weight:600;
+  border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:1}
+table.tb td{padding:8px 11px;border-bottom:1px solid var(--border);vertical-align:top}
+table.tb tr:hover td{background:rgba(255,255,255,.022)}
+.pill{display:inline-block;padding:1px 7px;border-radius:4px;font-size:11px;font-weight:600}
+.pill.pub{background:rgba(129,199,132,.15);color:var(--green)}
+.pill.int{background:rgba(79,195,247,.15);color:var(--accent)}
+.pill.con{background:rgba(255,183,77,.15);color:var(--orange)}
+.pill.sec{background:rgba(239,83,80,.15);color:var(--red)}
+.pill.rdy{background:rgba(129,199,132,.15);color:var(--green)}
+.pill.pnd{background:rgba(255,183,77,.15);color:var(--orange)}
+.pill.fal{background:rgba(239,83,80,.15);color:var(--red)}
+.inp{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:8px 11px;border-radius:7px;font:inherit;font-size:13px;outline:none;margin-bottom:10px}
+.inp:focus{border-color:var(--accent)}
+textarea.inp{resize:vertical;min-height:88px;font-family:Consolas,monospace;font-size:12.5px}
+.frow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.frow .inp{margin-bottom:0;flex:1;min-width:180px}
+.empty{text-align:center;padding:46px 20px;color:var(--dim);font-size:13px}
+.empty .big{font-size:34px;margin-bottom:10px;opacity:.4}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);
+  border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+/* ---------- 顶栏用户区 ---------- */
+.user{display:flex;align-items:center;gap:9px;padding-left:13px;border-left:1px solid var(--border)}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--panel3);display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex:0 0 30px}
+.user .nm{font-size:12.5px;font-weight:600;line-height:1.3}
+.user .cl{font-size:10.5px;color:var(--dim);line-height:1.3}
+.clr{display:inline-block;padding:0 6px;border-radius:4px;font-weight:700;font-size:10px}
+.clr.public{background:rgba(129,199,132,.16);color:var(--green)}
+.clr.internal{background:rgba(79,195,247,.16);color:var(--accent)}
+.clr.confidential{background:rgba(255,183,77,.16);color:var(--orange)}
+.clr.secret{background:rgba(239,83,80,.18);color:var(--red)}
+
+/* ---------- 登录页 ---------- */
+#login{position:fixed;inset:0;z-index:99;background:var(--bg);display:flex;align-items:center;justify-content:center}
+#login.off{display:none}
+.login-bg{position:absolute;inset:0;background:
+  radial-gradient(900px 480px at 22% 18%,rgba(79,195,247,.10),transparent 60%),
+  radial-gradient(700px 420px at 82% 82%,rgba(179,157,219,.09),transparent 60%)}
+.lbox{position:relative;width:372px;background:var(--panel);border:1px solid var(--border);
+  border-radius:15px;padding:32px 30px;box-shadow:0 22px 60px rgba(0,0,0,.5)}
+.lbox .logo{width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,#2a4a5c,#1b3340);
+  border:1px solid #33566b;display:flex;align-items:center;justify-content:center;font-size:21px;margin-bottom:15px}
+.lbox h2{font-size:19px;font-weight:700;margin-bottom:5px}
+.lbox .sub{font-size:12.5px;color:var(--dim);margin-bottom:22px;line-height:1.6}
+.lbox label{display:block;font-size:11.5px;color:var(--muted);margin-bottom:6px;margin-top:14px}
+.lbox input{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:10px 13px;border-radius:8px;font:inherit;font-size:13.5px;outline:none}
+.lbox input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,195,247,.10)}
+.lbtn{width:100%;margin-top:20px;background:var(--accent);border:none;color:#06202b;font-weight:700;
+  padding:11px;border-radius:8px;font-size:14px;cursor:pointer;transition:.15s}
+.lbtn:hover{filter:brightness(1.08)}
+.lbtn:disabled{opacity:.55;cursor:not-allowed}
+.lerr{margin-top:13px;font-size:12.5px;color:var(--red);background:rgba(239,83,80,.1);
+  border:1px solid rgba(239,83,80,.3);border-radius:7px;padding:8px 11px;display:none}
+.lerr.on{display:block}
+.lhint{margin-top:20px;padding-top:16px;border-top:1px solid var(--border);font-size:11px;color:var(--dim);line-height:1.85}
+.lhint b{color:var(--muted)}
+.lhint code{background:var(--panel2);padding:1px 5px;border-radius:3px;font-size:10.5px}
+.lhint .acc{display:flex;justify-content:space-between;padding:2px 0}
+.lhint .acc span:last-child{color:var(--muted)}
+
+.note{font-size:12px;color:var(--dim);background:var(--panel2);border-left:3px solid var(--accent);
+  padding:9px 13px;border-radius:0 7px 7px 0;margin-bottom:14px;line-height:1.65}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--panel3);border-radius:5px}
+::-webkit-scrollbar-thumb:hover{background:var(--border)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- 侧栏 -->
+  <aside class="side">
+    <div class="brand">
+      <h1>MCU RAG QA</h1>
+      <p>检索诊断控制台</p>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-v="chat" class="on"><span class="ico">💬</span>问答</button>
+      <button data-v="docs"><span class="ico">📚</span>文档库<span class="cnt" id="cDoc">–</span></button>
+      <button data-v="ingest"><span class="ico">📥</span>入库</button>
+      <button data-v="logs"><span class="ico">📊</span>查询日志</button>
+      <button data-v="fb"><span class="ico">👍</span>反馈</button>
+      <button data-v="about"><span class="ico">⚙️</span>接口与设置</button>
+    </nav>
+    <div class="side-foot">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <span class="dot" id="dot"></span><span id="conn">未连接</span>
+      </div>
+      <div id="ver">FastAPI · /api/v1</div>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <div class="main">
+    <div class="topbar">
+      <span class="t" id="vtitle">问答</span>
+      <span class="sp"></span>
+      <div class="field"><span>API</span><input id="base" value="http://localhost:8000/api/v1" style="width:186px"></div>
+      <button class="btn" id="btnHealth">检查</button>
+      <div class="user">
+        <span class="avatar" id="avatar">?</span>
+        <div>
+          <div class="nm" id="uname">未登录</div>
+          <div class="cl" id="uclr">—</div>
+        </div>
+        <button class="btn" id="logout" title="退出登录">登出</button>
+      </div>
+    </div>
+
+    <!-- 问答 -->
+    <section class="view pad0 on" id="v-chat">
+      <div class="chat" id="chat"></div>
+      <div class="composer">
+        <div class="row">
+          <textarea id="q" rows="1" placeholder="输入问题，Enter 发送 / Shift+Enter 换行"></textarea>
+          <button class="btn pri" id="send" style="height:42px;padding:0 20px">发送</button>
+        </div>
+        <div class="opt">
+          <label><input type="checkbox" id="stream"> 流式输出（SSE）</label>
+          <label>top_k <input type="range" id="topk" min="1" max="20" value="5"><b id="topkv">5</b></label>
+          <label><input type="checkbox" id="diag" checked> 回答后自动拉取诊断信息</label>
+          <span class="sp" style="flex:1"></span>
+          <button class="btn" id="clear">清空会话</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 文档库 -->
+    <section class="view" id="v-docs">
+      <div class="hd"><h2>文档库</h2><span class="sp"></span>
+        <button class="btn" data-reload="docs">刷新</button></div>
+      <div id="docsBody"><div class="empty"><div class="big">📚</div>加载中…</div></div>
+    </section>
+
+    <!-- 入库 -->
+    <section class="view" id="v-ingest">
+      <div class="hd"><h2>入库</h2></div>
+      <div class="note">入库走 Celery 异步任务。提交后返回 <code>task_id</code>，可查询进度。<b>批量入库要求文件名以 <code>_PUBLIC / _INTERNAL / _CONFIDENTIAL / _SECRET</code> 结尾</b>，任一不合规则整批拒绝。</div>
+      <div class="card">
+        <h3>单文件入库</h3>
+        <div class="frow" style="margin-bottom:10px">
+          <input class="inp" id="iPath" placeholder="文件绝对路径，如 E:\docs\STM32F103.pdf">
+          <input class="inp" id="iName" placeholder="文档名（留空用文件名）" style="max-width:210px">
+          <select class="inp" id="iCls" style="max-width:150px">
+            <option value="public">public</option><option value="internal">internal</option>
+            <option value="confidential">confidential</option><option value="secret">secret</option>
+          </select>
+          <button class="btn pri" id="iGo" style="height:36px">提交</button>
+        </div>
+        <div style="font-size:11.5px;color:var(--dim)">支持 PDF / DOCX / MD / TXT，由 ReaderFactory 自动识别</div>
+      </div>
+      <div class="card">
+        <h3>批量入库（按文件名解析密级）</h3>
+        <textarea class="inp" id="iBatch" placeholder="每行一个绝对路径：&#10;E:\data\公司简介_PUBLIC.txt&#10;E:\data\薪资结构_CONFIDENTIAL.txt"></textarea>
+        <button class="btn pri" id="iBatchGo">批量提交</button>
+      </div>
+      <div class="card">
+        <h3>任务状态查询</h3>
+        <div class="frow">
+          <input class="inp" id="iTask" placeholder="task_id">
+          <button class="btn" id="iTaskGo" style="height:36px">查询</button>
+        </div>
+        <pre id="iOut" style="display:none;background:#0a0c12;border:1px solid var(--border);border-radius:7px;padding:11px;margin-top:10px;font-size:12px;max-height:260px;overflow:auto"></pre>
+      </div>
+    </section>
+
+    <!-- 查询日志 -->
+    <section class="view" id="v-logs">
+      <div class="hd"><h2>查询日志</h2><span class="sp"></span>
+        <button class="btn" data-reload="logs">刷新</button></div>
+      <div class="note">这里能看到每次请求<b>实际走了哪条链路</b>：<code>cache_hit</code>=命中缓存、<code>degraded</code>=走了降级、<code>injection_blocked</code>=被注入检测拦截、<code>llm_used</code>=LLM 真正生成了答案。四项全灰且 <code>llm_used=false</code> 时，说明返回的只是拼接的原文片段。</div>
+      <div id="logsBody"><div class="empty"><div class="big">📊</div>加载中…</div></div>
+    </section>
+
+    <!-- 反馈 -->
+    <section class="view" id="v-fb">
+      <div class="hd"><h2>用户反馈</h2><span class="sp"></span>
+        <button class="btn" data-reload="fb">刷新</button></div>
+      <div id="fbBody"><div class="empty"><div class="big">👍</div>加载中…</div></div>
+    </section>
+
+    <!-- 设置 -->
+    <section class="view" id="v-about">
+      <div class="hd"><h2>接口与设置</h2></div>
+      <div class="card">
+        <h3>已对接接口</h3>
+        <table class="tb">
+          <tr><th style="width:70px">方法</th><th style="width:250px">路径</th><th>说明</th></tr>
+          <tr><td><b>POST</b></td><td class="mono">/qa</td><td>问答（支持 stream SSE），返回 answer + sources</td></tr>
+          <tr><td><b>POST</b></td><td class="mono">/ingest</td><td>单文件异步入库</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/ingest/{task_id}</td><td>入库任务状态</td></tr>
+          <tr><td><b>POST</b></td><td class="mono">/ingest/by-name</td><td>批量入库（按文件名解析密级）</td></tr>
+          <tr><td><b>POST</b></td><td class="mono">/feedback</td><td>提交反馈（up / down / correction）</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/documents</td><td>文档列表</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/query-logs</td><td>查询日志（含链路诊断字段）</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/feedbacks</td><td>反馈列表</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/stats</td><td>系统统计</td></tr>
+          <tr><td><b>POST</b></td><td class="mono">/auth/login</td><td>账号密码登录，返回 token（携带该账号的密级与租户）</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/auth/me</td><td>当前登录身份</td></tr>
+          <tr><td><b>GET</b></td><td class="mono">/health</td><td>健康检查</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>请求头</h3>
+        <table class="tb">
+          <tr><th style="width:180px">Header</th><th>说明</th></tr>
+          <tr><td class="mono">Authorization</td><td><b>Bearer &lt;token&gt;</b> —— 登录后携带，服务端据此确定密级（唯一可信来源）</td></tr>
+          <tr><td class="mono" style="text-decoration:line-through;opacity:.5">X-User-Clearance</td>
+              <td style="opacity:.65">已废弃。登录态下该头被<b>忽略</b>；仅未登录的本地调试模式生效。保留它是因为客户端可随意伪造，存在越权风险。</td></tr>
+          <tr><td class="mono" style="text-decoration:line-through;opacity:.5">X-User-Tenant</td>
+              <td style="opacity:.65">已废弃，租户同样取自 token。</td></tr>
+          <tr><td class="mono" style="opacity:.65">X-API-Key</td><td>保留但未实现真实校验</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>已知契约缺口（前端已绕行，建议后端补齐）</h3>
+        <table class="tb">
+          <tr><th style="width:210px">缺口</th><th>影响 / 绕行方式</th></tr>
+          <tr><td class="mono">QAResponse 无 query_log_id</td><td>反馈无法直接关联问答。前端绕行：回答后调 <code>/query-logs?limit=1</code> 取最新一条并校验问题文本；并发时会错配，建议后端在 QAResponse 增加该字段。</td></tr>
+          <tr><td class="mono">QAResponse 无链路诊断字段</td><td><code>cache_hit / degraded / llm_used</code> 已写进 query_logs 但不返回给前端，需二次查询才能展示。</td></tr>
+          <tr><td class="mono">SourceItem 仅有 score</td><td>分数是 RRF 融合值，无法区分 dense / sparse 贡献，排查检索问题时信息不足。建议增加 <code>dense_score / sparse_score</code>。</td></tr>
+          <tr><td class="mono">缺少删除文档接口</td><td>文档页只能查看，无法下线文档（后端 Document 有软删除字段但未暴露）。</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>访问方式</h3>
+        <p style="font-size:12.5px;color:var(--muted);line-height:1.8">
+          本页依赖跨域访问后端。若后端未挂载静态目录，可用任意静态服务器打开：<br>
+          <code style="background:var(--panel2);padding:3px 7px;border-radius:4px;display:inline-block;margin-top:5px">
+          python -m http.server 8080 --directory static</code><br>
+          然后访问 <code>http://localhost:8080/index.html</code>。或在 FastAPI 中挂载（见交付说明）。
+        </p>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- 登录页 -->
+<div id="login">
+  <div class="login-bg"></div>
+  <div class="lbox">
+    <div class="logo">🛡️</div>
+    <h2>MCU RAG QA</h2>
+    <div class="sub">检索诊断控制台<br>密级由登录账号决定，无法在前端修改</div>
+
+    <label>用户名</label>
+    <input id="lUser" autocomplete="username" placeholder="guest / engineer / finance / admin">
+
+    <label>密码</label>
+    <input id="lPass" type="password" autocomplete="current-password" placeholder="请输入密码">
+
+    <button class="lbtn" id="lGo">登 录</button>
+    <div class="lerr" id="lErr"></div>
+
+    <div class="lhint">
+      <b>测试账号</b>（由 scripts/init_users.py 创建）
+      <div class="acc"><span><code>guest</code> / <code>guest123</code></span><span class="clr public">public</span></div>
+      <div class="acc"><span><code>engineer</code> / <code>eng123</code></span><span class="clr internal">internal</span></div>
+      <div class="acc"><span><code>finance</code> / <code>fin123</code></span><span class="clr confidential">confidential</span></div>
+      <div class="acc"><span><code>admin</code> / <code>admin123</code></span><span class="clr secret">secret</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   MCU RAG QA 控制台 —— 无依赖单文件前端
+   ============================================================ */
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c =>
+  ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+
+/* ============================================================
+   登录态：token 由服务端签发，密级取自 token，前端不可修改
+   ============================================================ */
+const AUTH_KEY = "mcu_rag_auth_v1";
+let AUTH = { token: "", user: null };
+try { AUTH = JSON.parse(localStorage.getItem(AUTH_KEY)) || AUTH; } catch (e) { /* 忽略坏数据 */ }
+
+function saveAuth() { localStorage.setItem(AUTH_KEY, JSON.stringify(AUTH)); }
+function clearAuth() { AUTH = { token: "", user: null }; localStorage.removeItem(AUTH_KEY); }
+
+const base = () => ($("#base").value || "").replace(/\/+$/, "");
+const heads = () => {
+  const h = { "Content-Type": "application/json" };
+  if (AUTH.token) h["Authorization"] = "Bearer " + AUTH.token;
+  return h;
+};
+
+function onUnauthorized() {
+  clearAuth();
+  showLogin("登录已失效或已过期，请重新登录");
+}
+
+async function api(path, opt = {}) {
+  const r = await fetch(base() + path, { ...opt, headers: { ...heads(), ...(opt.headers || {}) } });
+  if (r.status === 401) { onUnauthorized(); throw new Error("登录失效"); }
+  if (!r.ok) throw new Error("HTTP " + r.status + " " + r.statusText);
+  return r.json();
+}
+
+/* ---------- 登录页 ---------- */
+function showLogin(err) {
+  $("#login").classList.remove("off");
+  if (err) { $("#lErr").textContent = err; $("#lErr").classList.add("on"); }
+}
+function hideLogin() { $("#login").classList.add("off"); $("#lErr").classList.remove("on"); }
+
+function paintUser() {
+  const u = AUTH.user;
+  if (!u) {
+    $("#uname").textContent = "未登录";
+    $("#uclr").innerHTML = "—";
+    $("#avatar").textContent = "?";
+    return;
+  }
+  $("#uname").textContent = u.display_name || u.username;
+  $("#uclr").innerHTML = `<span class="clr ${u.clearance}">${u.clearance}</span>`;
+  $("#avatar").textContent = (u.display_name || u.username).slice(0, 1).toUpperCase();
+}
+
+async function enterApp() {
+  hideLogin();
+  paintUser();
+  health();
+  if (!$("#chat").dataset.ready) {
+    $("#chat").dataset.ready = "1";
+    addMsg("bot", `已登录为 <b>${esc(AUTH.user.display_name || AUTH.user.username)}</b>，
+      当前密级 <span class="clr ${AUTH.user.clearance}">${AUTH.user.clearance}</span>。<br>
+      可见文档范围由账号决定 —— 换个账号登录就能直接对比权限过滤效果。`);
+  }
+}
+
+async function doLogin() {
+  const u = $("#lUser").value.trim(), p = $("#lPass").value;
+  if (!u || !p) { showLogin("请输入用户名和密码"); return; }
+  const btn = $("#lGo");
+  btn.disabled = true; btn.textContent = "登录中…";
+  try {
+    const r = await fetch(base() + "/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    const j = await r.json();
+    if (!r.ok || j.status !== "ok" || !j.token) {
+      showLogin(j.message || ("登录失败（HTTP " + r.status + "）"));
+      return;
+    }
+    AUTH = { token: j.token, user: j.user };
+    saveAuth();
+    $("#lPass").value = "";
+    await enterApp();
+  } catch (e) {
+    showLogin("无法连接后端：" + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "登 录";
+  }
+}
+
+$("#lGo").onclick = doLogin;
+$("#lPass").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+$("#lUser").addEventListener("keydown", e => { if (e.key === "Enter") $("#lPass").focus(); });
+$("#logout").onclick = () => {
+  clearAuth();
+  $("#chat").dataset.ready = "";
+  $("#chat").innerHTML = "";
+  paintUser();
+  showLogin();
+};
+
+async function boot() {
+  if (!AUTH.token) { showLogin(); return; }
+  try {
+    const j = await api("/auth/me");
+    if (!j.authenticated) { clearAuth(); showLogin("登录已过期，请重新登录"); return; }
+    AUTH.user = j.user;
+    saveAuth();
+    await enterApp();
+  } catch (e) {
+    clearAuth();
+    showLogin(e.message === "登录失效" ? "登录已失效，请重新登录" : "无法连接后端：" + e.message);
+  }
+}
+
+/* ---------- 极简 Markdown 渲染 ---------- */
+function md(src) {
+  let s = esc(src);
+  const B = [];                                   // 块级占位（不参与 <p> 包裹）
+  const put = h => { B.push(h); return "\u0000B" + (B.length - 1) + "\u0000"; };
+
+  // 1. 代码块
+  s = s.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) =>
+    put(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`));
+  // 2. 行内代码
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+  // 3. 标题
+  s = s.replace(/^(#{1,6})\s+(.+)$/gm, (m, h, t) => {
+    const lv = Math.min(h.length, 3);
+    return put(`<h${lv}>${t}</h${lv}>`);
+  });
+  // 4. 粗体
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  // 5. 列表（连续行合并为一个 ul / ol）
+  s = s.replace(/(?:^[ \t]*[-*][ \t]+.+(?:\n|$))+/gm, m =>
+    put("<ul>" + m.trim().split("\n").map(l => l.replace(/^[ \t]*[-*][ \t]+/, ""))
+      .filter(Boolean).map(i => `<li>${i}</li>`).join("") + "</ul>"));
+  s = s.replace(/(?:^[ \t]*\d+\.[ \t]+.+(?:\n|$))+/gm, m =>
+    put("<ol>" + m.trim().split("\n").map(l => l.replace(/^[ \t]*\d+\.[ \t]+/, ""))
+      .filter(Boolean).map(i => `<li>${i}</li>`).join("") + "</ol>"));
+
+  // 6. 段落与换行（块级占位独占一段时不套 <p>）
+  s = s.replace(/(\u0000B\d+\u0000)/g, "\u0001$1\u0001");
+  s = s.split(/\u0001|\n{2,}/).map(seg => {
+    const t = seg.replace(/\n/g, "<br>").replace(/^(?:<br>)+|(?:<br>)+$/g, "").trim();
+    if (!t) return "";                              // 跳过空段
+    return /^(\u0000B\d+\u0000)+$/.test(t) ? t : "<p>" + t + "</p>";
+  }).join("");
+
+  // 7. 还原块级占位
+  return s.replace(/\u0000B(\d+)\u0000/g, (m, i) => B[+i]);
+}
+
+/* ---------- 视图切换 ---------- */
+const TITLES = { chat:"问答", docs:"文档库", ingest:"入库", logs:"查询日志", fb:"反馈", about:"接口与设置" };
+const LOADED = {};
+$("#nav").addEventListener("click", e => {
+  const b = e.target.closest("button[data-v]");
+  if (!b) return;
+  const v = b.dataset.v;
+  $$("#nav button").forEach(x => x.classList.toggle("on", x === b));
+  $$(".view").forEach(x => x.classList.toggle("on", x.id === "v-" + v));
+  $("#vtitle").textContent = TITLES[v];
+  if (v === "docs") loadDocs();
+  if (v === "logs") loadLogs();
+  if (v === "fb") loadFb();
+});
+$$("[data-reload]").forEach(b => b.onclick = () =>
+  ({ docs: loadDocs, logs: loadLogs, fb: loadFb })[b.dataset.reload]());
+
+/* ---------- 健康检查 ---------- */
+async function health() {
+  const d = $("#dot"), c = $("#conn");
+  d.className = "dot warn"; c.textContent = "检查中…";
+  try {
+    const j = await api("/health");
+    d.className = "dot on";
+    c.textContent = "已连接 · " + (j.total_chunks ?? 0) + " chunks";
+    const s = await api("/stats").catch(() => null);
+    if (s) { $("#cDoc").textContent = s.documents ?? 0; }
+  } catch (e) {
+    d.className = "dot off"; c.textContent = "无法连接";
+    $("#cDoc").textContent = "–";
+  }
+}
+$("#btnHealth").onclick = health;
+$("#base").addEventListener("change", health);
+
+/* ============================================================
+   问答
+   ============================================================ */
+let lastLogId = null;
+
+function addMsg(role, html, extra) {
+  const el = document.createElement("div");
+  el.className = "msg" + (role === "me" ? " me" : "");
+  el.innerHTML = `<div class="who">${role === "me" ? "我" : "RAG 助手"}</div>
+    <div class="bubble ${role === "me" ? "" : "md"}">${html}</div>`;
+  if (extra) el.querySelector(".bubble").insertAdjacentHTML("beforeend", extra);
+  $("#chat").appendChild(el);
+  $("#chat").scrollTop = $("#chat").scrollHeight;
+  return el;
+}
+
+function srcHtml(sources) {
+  if (!sources || !sources.length) return "";
+  const max = Math.max(...sources.map(s => s.score || 0), 0.001);
+  const rows = sources.map((s, i) => {
+    const pct = Math.round((s.score || 0) / max * 100);
+    const col = pct > 66 ? "var(--green)" : pct > 33 ? "var(--orange)" : "var(--dim)";
+    return `<div class="src" data-i="${i}">
+      <div class="r1">
+        <span class="rk">${i + 1}</span>
+        <span class="dn">${esc(s.doc_name || "—")}</span>
+        <span class="hd">${esc(s.heading_number || "")}</span>
+        <span class="sc" style="color:${col}">${(s.score || 0).toFixed(4)}</span>
+      </div>
+      <div class="bar"><i style="width:${pct}%;background:${col}"></i></div>
+      <div class="body">${esc(s.content || "")}</div>
+    </div>`;
+  }).join("");
+  return `<div class="srcs"><div class="h">来源引用 · ${sources.length} 条（点击查看片段）</div>${rows}</div>`;
+}
+
+$("#chat").addEventListener("click", e => {
+  const s = e.target.closest(".src");
+  if (s) s.classList.toggle("open");
+  const b = e.target.closest(".fbBtn");
+  if (b) sendFb(b);
+});
+
+async function sendFb(btn) {
+  const wrap = btn.closest(".acts");
+  const type = btn.dataset.t;
+  if (!lastLogId) { alert("未取到 query_log_id，无法提交反馈"); return; }
+  let corrected = "";
+  if (type === "correction") {
+    corrected = prompt("请输入正确答案：") || "";
+    if (!corrected) return;
+  }
+  try {
+    await api("/feedback", {
+      method: "POST",
+      body: JSON.stringify({ query_log_id: lastLogId, feedback_type: type, corrected_answer: corrected, comment: "" }),
+    });
+    wrap.querySelectorAll(".fbBtn").forEach(x => x.classList.remove("on"));
+    btn.classList.add("on");
+  } catch (e) { alert("反馈失败：" + e.message); }
+}
+
+/* 回答后拉取本次请求的链路诊断（后端未把这些字段放进 QAResponse） */
+async function fetchDiag(question, bubble) {
+  try {
+    const j = await api("/query-logs?limit=5");
+    const log = (j.logs || []).find(l => (l.question || "") === question.slice(0, 100))
+             || (j.logs || [])[0];
+    if (!log) return;
+    lastLogId = log.id;
+    const t = [];
+    t.push(`<span class="tag">⏱ ${log.elapsed_ms ?? "?"} ms</span>`);
+    t.push(`<span class="tag info">来源 ${log.sources_count ?? 0}</span>`);
+    t.push(log.llm_used ? `<span class="tag ok">LLM 已生成</span>` : `<span class="tag bad">LLM 未生成（原文拼接）</span>`);
+    if (log.cache_hit) t.push(`<span class="tag warn">缓存命中</span>`);
+    if (log.degraded) t.push(`<span class="tag warn">走了降级链路</span>`);
+    if (log.injection_blocked) t.push(`<span class="tag bad">注入检测拦截</span>`);
+    const acts = `<div class="acts">
+      <button class="btn fbBtn" data-t="up">👍 有帮助</button>
+      <button class="btn fbBtn" data-t="down">👎 没帮助</button>
+      <button class="btn fbBtn" data-t="correction">✏️ 纠正答案</button>
+      <span style="font-size:11px;color:var(--dim)">log #${log.id}</span>
+    </div>`;
+    bubble.insertAdjacentHTML("beforeend", `<div class="diag">${t.join("")}</div>` + acts);
+    $("#chat").scrollTop = $("#chat").scrollHeight;
+  } catch (e) { /* 诊断拉取失败不影响主流程 */ }
+}
+
+async function ask() {
+  const q = $("#q").value.trim();
+  if (!q) return;
+  $("#q").value = ""; $("#q").style.height = "auto";
+  addMsg("me", md(q));
+
+  const stream = $("#stream").checked;
+  const topk = +$("#topk").value;
+  const el = addMsg("bot", `<span class="spin"></span> 检索中…`);
+  const bub = el.querySelector(".bubble");
+
+  if (stream) {
+    try {
+      const r = await fetch(base() + "/qa", {
+        method: "POST", headers: heads(),
+        body: JSON.stringify({ question: q, top_k: topk, stream: true }),
+      });
+      if (!r.ok) {
+        if (r.status === 401) { onUnauthorized(); throw new Error("登录失效"); }
+        throw new Error("HTTP " + r.status);
+      }
+      bub.innerHTML = "";
+      const rd = r.body.getReader(), dec = new TextDecoder();
+      let buf = "", full = "";
+      for (;;) {
+        const { done, value } = await rd.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const parts = buf.split("\n\n");
+        buf = parts.pop();
+        for (const p of parts) {
+          const line = p.split("\n").find(x => x.startsWith("data: "));
+          if (!line) continue;
+          const d = line.slice(6);
+          if (d === "[DONE]") continue;
+          full += d;
+          bub.innerHTML = md(full);
+          $("#chat").scrollTop = $("#chat").scrollHeight;
+        }
+      }
+      if (!full) bub.innerHTML = '<span style="color:var(--muted)">（空响应）</span>';
+      if ($("#diag").checked) fetchDiag(q, bub);
+    } catch (e) {
+      bub.innerHTML = `<span style="color:var(--red)">流式请求失败：${esc(e.message)}</span>`;
+    }
+    return;
+  }
+
+  try {
+    const j = await api("/qa", {
+      method: "POST",
+      body: JSON.stringify({ question: q, top_k: topk, stream: false }),
+    });
+    bub.innerHTML = md(j.answer || "（无答案）") + srcHtml(j.sources);
+    if (!j.sources || !j.sources.length) {
+      bub.insertAdjacentHTML("beforeend",
+        `<div class="diag"><span class="tag bad">无来源引用</span>${
+          /未找到|无法回答|暂时无法/.test(j.answer || "") ? '<span class="tag warn">命中兜底文案</span>' : ""
+        }</div>`);
+    }
+    if ($("#diag").checked) fetchDiag(q, bub);
+  } catch (e) {
+    bub.innerHTML = `<span style="color:var(--red)">请求失败：${esc(e.message)}</span>`;
+  }
+}
+
+$("#send").onclick = ask;
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+$("#q").addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 180) + "px";
+});
+$("#topk").addEventListener("input", e => $("#topkv").textContent = e.target.value);
+$("#clear").onclick = () => { $("#chat").innerHTML = ""; lastLogId = null; };
+
+/* ============================================================
+   文档库
+   ============================================================ */
+async function loadDocs() {
+  const b = $("#docsBody");
+  b.innerHTML = '<div class="empty"><span class="spin"></span> 加载中…</div>';
+  try {
+    const j = await api("/documents?limit=200");
+    const ds = j.documents || [];
+    if (!ds.length) { b.innerHTML = '<div class="empty"><div class="big">📚</div>暂无文档，先去「入库」页提交</div>'; return; }
+    b.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><table class="tb">
+      <tr><th>ID</th><th>文档名</th><th>类型</th><th>密级</th><th>切片数</th><th>状态</th><th>入库时间</th></tr>
+      ${ds.map(d => `<tr>
+        <td class="mono">${d.id}</td>
+        <td><b>${esc(d.doc_name)}</b></td>
+        <td>${esc(d.file_type)}</td>
+        <td><span class="pill ${{public:"pub",internal:"int",confidential:"con",secret:"sec"}[d.classification] || "pub"}">${esc(d.classification)}</span></td>
+        <td class="mono">${d.chunk_count ?? 0}</td>
+        <td><span class="pill ${{ready:"rdy",pending:"pnd",processing:"pnd",failed:"fal"}[d.status] || "pnd"}">${esc(d.status)}</span></td>
+        <td style="color:var(--dim)">${esc((d.created_at || "").replace("T", " ").slice(0, 19))}</td>
+      </tr>`).join("")}
+    </table></div>`;
+  } catch (e) {
+    b.innerHTML = `<div class="empty"><div class="big">⚠️</div>加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ============================================================
+   查询日志
+   ============================================================ */
+async function loadLogs() {
+  const b = $("#logsBody");
+  b.innerHTML = '<div class="empty"><span class="spin"></span> 加载中…</div>';
+  try {
+    const j = await api("/query-logs?limit=100");
+    const ls = j.logs || [];
+    if (!ls.length) { b.innerHTML = '<div class="empty"><div class="big">📊</div>暂无查询记录</div>'; return; }
+    const s = await api("/stats").catch(() => null);
+    const cards = s ? `<div class="stats">
+      <div class="stat"><div class="n">${s.documents ?? 0}</div><div class="l">文档</div></div>
+      <div class="stat"><div class="n">${s.chunks ?? 0}</div><div class="l">切片</div></div>
+      <div class="stat"><div class="n">${s.queries ?? 0}</div><div class="l">查询</div></div>
+      <div class="stat"><div class="n" style="color:var(--green)">${s.up_votes ?? 0}</div><div class="l">好评</div></div>
+      <div class="stat"><div class="n" style="color:var(--red)">${s.down_votes ?? 0}</div><div class="l">差评</div></div>
+      <div class="stat"><div class="n" style="color:var(--orange)">${s.pending_ingestion_tasks ?? 0}</div><div class="l">入库中</div></div>
+    </div>` : "";
+    b.innerHTML = cards + `<div class="card" style="padding:0;overflow:hidden"><table class="tb">
+      <tr><th>#</th><th>问题</th><th>链路诊断</th><th>来源</th><th>耗时</th><th>时间</th></tr>
+      ${ls.map(l => {
+        const tg = [];
+        if (l.injection_blocked) tg.push('<span class="tag bad">注入拦截</span>');
+        if (l.cache_hit) tg.push('<span class="tag warn">缓存</span>');
+        if (l.degraded) tg.push('<span class="tag warn">降级</span>');
+        tg.push(l.llm_used ? '<span class="tag ok">LLM</span>' : '<span class="tag bad">非LLM</span>');
+        return `<tr>
+          <td class="mono">${l.id}</td>
+          <td style="max-width:340px">${esc(l.question)}</td>
+          <td><div class="diag" style="margin:0">${tg.join("")}</div></td>
+          <td class="mono">${l.sources_count ?? 0}</td>
+          <td class="mono">${l.elapsed_ms ?? "?"}ms</td>
+          <td style="color:var(--dim);white-space:nowrap">${esc((l.created_at || "").replace("T", " ").slice(5, 19))}</td>
+        </tr>`;
+      }).join("")}
+    </table></div>`;
+  } catch (e) {
+    b.innerHTML = `<div class="empty"><div class="big">⚠️</div>加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ============================================================
+   反馈
+   ============================================================ */
+async function loadFb() {
+  const b = $("#fbBody");
+  b.innerHTML = '<div class="empty"><span class="spin"></span> 加载中…</div>';
+  try {
+    const j = await api("/feedbacks?limit=100");
+    const fs = j.feedbacks || [];
+    if (!fs.length) { b.innerHTML = '<div class="empty"><div class="big">👍</div>暂无反馈</div>'; return; }
+    b.innerHTML = `<div class="card" style="padding:0;overflow:hidden"><table class="tb">
+      <tr><th>#</th><th>日志ID</th><th>类型</th><th>纠正答案</th><th>时间</th></tr>
+      ${fs.map(f => `<tr>
+        <td class="mono">${f.id}</td>
+        <td class="mono">${f.query_log_id}</td>
+        <td><span class="pill ${{up:"rdy",down:"fal",correction:"pnd"}[f.feedback_type] || "pnd"}">${esc(f.feedback_type)}</span></td>
+        <td style="max-width:420px;color:var(--muted)">${esc(f.corrected_answer || "—")}</td>
+        <td style="color:var(--dim);white-space:nowrap">${esc((f.created_at || "").replace("T", " ").slice(5, 19))}</td>
+      </tr>`).join("")}
+    </table></div>`;
+  } catch (e) {
+    b.innerHTML = `<div class="empty"><div class="big">⚠️</div>加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+/* ============================================================
+   入库
+   ============================================================ */
+function out(o) {
+  const p = $("#iOut");
+  p.style.display = "block";
+  p.textContent = typeof o === "string" ? o : JSON.stringify(o, null, 2);
+}
+
+$("#iGo").onclick = async () => {
+  const p = $("#iPath").value.trim();
+  if (!p) return alert("请填写文件路径");
+  out("提交中…");
+  try {
+    const j = await api("/ingest", { method: "POST", body: JSON.stringify({
+      file_path: p, doc_name: $("#iName").value.trim(), classification: $("#iCls").value })});
+    out(j);
+    $("#iTask").value = j.task_id || "";
+    setTimeout(health, 1200);
+  } catch (e) { out("失败：" + e.message); }
+};
+
+$("#iBatchGo").onclick = async () => {
+  const paths = $("#iBatch").value.split("\n").map(x => x.trim()).filter(Boolean);
+  if (!paths.length) return alert("请至少填写一个路径");
+  out("提交中…");
+  try {
+    const j = await api("/ingest/by-name", { method: "POST", body: JSON.stringify({ file_paths: paths }) });
+    out(j);
+    if (j.task_ids && j.task_ids.length) $("#iTask").value = j.task_ids[0];
+  } catch (e) { out("失败：" + e.message); }
+};
+
+$("#iTaskGo").onclick = async () => {
+  const t = $("#iTask").value.trim();
+  if (!t) return alert("请填写 task_id");
+  out("查询中…");
+  try { out(await api("/ingest/" + encodeURIComponent(t))); }
+  catch (e) { out("失败：" + e.message); }
+};
+
+/* ---------- 启动 ---------- */
+boot();
+</script>
+</body>
+</html>
