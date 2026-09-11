@@ -1,6 +1,40 @@
 ﻿"""PdfReader 单元测试 — 双模式分块验证。"""
 
-from app.ingest.pdf_reader import PdfReader
+from app.ingest.pdf_reader import PdfReader, _normalize_pdf_text
+
+
+class TestNormalizePdfText:
+    """pypdf 错位文本清洗。
+
+    回归背景：Linux CI 上 pypdf 从 Noto CJK 字体的 PDF 里提取出的文本形如
+    '\\x00第\\x00一\\x00条'（每个字符前夹一个 NUL），导致条款正则匹配不上、
+    文档退回逐页模式，测试断言 '第1页-段1' == '第一条' 失败。
+    """
+
+    def test_plain_text_unchanged(self):
+        """不含 NUL 的正常文本必须原样返回（零副作用）。"""
+        assert _normalize_pdf_text("第一条 为了保护个人信息权益") == "第一条 为了保护个人信息权益"
+        assert _normalize_pdf_text("plain ascii text") == "plain ascii text"
+
+    def test_strips_interleaved_nul_before_cjk(self):
+        """NUL + 已正确解码的汉字 → 剔除 NUL 后还原。"""
+        raw = "".join("\x00" + ch for ch in "第一条 为了避免")
+        assert _normalize_pdf_text(raw) == "第一条 为了避免"
+
+    def test_strips_nul_in_utf16_expanded_ascii(self):
+        """纯 ASCII 被按 UTF-16 展开（P\\x00D\\x00F）→ 剔除 NUL 后还原。"""
+        assert _normalize_pdf_text("P\x00D\x00F") == "PDF"
+
+    def test_empty_and_none_like(self):
+        assert _normalize_pdf_text("") == ""
+
+    def test_restores_article_detection(self):
+        """清洗后应能重新被条款正则命中——这才是真正要保的行为。"""
+        from app.ingest.pdf_reader import _ARTICLE_PATTERN
+
+        raw = "".join("\x00" + ch for ch in "第一条 为了保护个人信息权益")
+        assert _ARTICLE_PATTERN.search(raw) is None, "清洗前应识别不出条款"
+        assert _ARTICLE_PATTERN.search(_normalize_pdf_text(raw)) is not None
 
 
 class TestPdfReader:

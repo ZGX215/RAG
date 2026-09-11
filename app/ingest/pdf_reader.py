@@ -32,6 +32,27 @@ _MAX_LINES_PER_CHUNK = 4
 _MIN_CHARS_PER_CHUNK = 30
 
 
+def _normalize_pdf_text(text: str) -> str:
+    """修正 pypdf 在部分中文 PDF 上提取出的错位文本。
+
+    现象：PDF 嵌入某些字体时（Linux 上的 Noto CJK 即可复现），pypdf 会返回
+    ``'\\x00第\\x00一\\x00条'`` 这种"每个字符前夹一个 NUL"的文本。后果很严重：
+    条款正则匹配不上 → 本该走"条款模式"的法律文档退回"逐页段落模式"，
+    且关键词检索全部失效（用户看到的是答非所问）。该问题在 Linux CI 上首次暴露，
+    但真实中文 PDF 同样会遇到，因此在产品侧处理而不是改测试。
+
+    做法：剔除 NUL 字符。之所以够用——这类错位输出的共同点是"每个有效字符前夹一个
+    NUL"（CJK 字符其实已被正确解码），或者是纯 ASCII 文本被按 UTF-16 展开；
+    两种情况剔除 NUL 后都能还原。对不含 NUL 的正常文本是完全无操作的。
+
+    局限：若 PDF 字体连 ToUnicode 映射都缺失（字符本身就被解错），剔除 NUL 也救不回来，
+    那种情况需要更换 PDF 解析器，不在当前范围内。
+    """
+    if not text or "\x00" not in text:
+        return text
+    return text.replace("\x00", "")
+
+
 class PdfReader(SourceReader):
     """PDF 资料来源实现。
 
@@ -61,7 +82,9 @@ class PdfReader(SourceReader):
         pages_text = []
         full_text = ""
         for page_num, page in enumerate(reader.pages, 1):
-            page_text = page.extract_text() or ""
+            # 清洗：pypdf 在部分中文 PDF 上会输出夹带 NUL 的错位文本，直接使用会让
+            # 条款识别与关键词匹配全部失效（见 _normalize_pdf_text 的说明）。
+            page_text = _normalize_pdf_text(page.extract_text() or "")
             pages_text.append((page_num, page_text))
             full_text += page_text + "\n\n"
 
