@@ -14,6 +14,12 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# 启动即校验配置：生产环境（APP_ENV=production）缺关键配置直接拒绝启动，
+# 开发环境只告警。放在最前面，避免加载完模型才发现配置不可用。
+from config.settings import settings, validate_runtime_config
+
+validate_runtime_config()
+
 # 先在 main 线程初始化模型 + ChromaDB
 from app.access.app import init_repo, app
 init_repo()
@@ -31,7 +37,7 @@ def _warmup():
     time.sleep(3)  # 等 uvicorn 启动
     try:
         r = requests.post(
-            "http://localhost:8000/api/v1/qa",
+            f"http://localhost:{settings.api.port}/api/v1/qa",
             json={"question": "你好", "top_k": 1},
             headers={"X-User-Clearance": "public"},
             timeout=120,
@@ -43,6 +49,11 @@ def _warmup():
 warmup_thread = threading.Thread(target=_warmup, daemon=True)
 warmup_thread.start()
 
-# 再启动 uvicorn
+# 再启动 uvicorn（host/port 统一由 config.settings 提供，不再写死）
 import uvicorn
-uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")
+uvicorn.run(
+    app,
+    host=settings.api.host,
+    port=settings.api.port,
+    log_level=settings.general.log_level.lower(),
+)
