@@ -14,6 +14,10 @@
 #
 # 2) 首次运行会偏慢：requirements.txt 含 sentence-transformers / chromadb
 #    等重依赖。之后有 pip 缓存会快很多。
+#
+# 两个 job（并行执行）：
+#   - lint-and-test：ruff → pytest → 覆盖率门禁（约 2 分钟，快速反馈）
+#   - docker-build ：真实构建镜像并断言镜像内容（约 10 分钟，见该 job 注释）
 # ============================================================
 
 name: CI
@@ -85,3 +89,59 @@ jobs:
             --cov=app --cov=config \
             --cov-report=term-missing \
             --cov-fail-under=55
+
+  docker-build:
+    name: Docker 镜像构建验证
+    runs-on: ubuntu-latest
+    # Docker 镜像要装 torch / sentence-transformers / chromadb，比测试 job 慢得多。
+    # 首次约 10 分钟；之后靠 gha 层缓存，只有 requirements 变化时才会重建那一层。
+    timeout-minutes: 30
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 构建镜像
+        # 为什么要在 CI 里构建镜像（而不是只在本地 build 一次）：
+        #   1) Dockerfile 的改动此前从未被真正验证过 —— 本机 Docker 不可用
+        #      （需管理员权限；WSL 路线被本机安全策略禁用），所以"能不能构建成功"
+        #      一直是个未验证的假设。
+        #   2) 这次改动恰恰是 Dockerfile 里的依赖安装层（改用 CPU 版 torch），
+        #      属于最容易出错的一层，必须有真实构建来兜住。
+        #   3) 放 CI 之后每次 push 都会重跑 → 从"一次性验证"变成"长期回归护栏"，
+        #      以后谁改了 Dockerfile 或 requirements，构建坏了立刻会红。
+        #   用 gha 层缓存：Dockerfile 分层，依赖层没变时不必重装。
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: mcu-rag-qa:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: 验证镜像内容
+        # 关键：不只验证"构建成功"，还要验证"构建出来的东西是对的"。
+        # 断言 torch 是 +cpu 版 —— 这正是本次 Dockerfile 改动要达到的效果。
+        # 若哪天有人把 CPU 版 torch 那行删了，这个断言会立刻失败，
+        # 而不是等到某次 docker build 后才发现镜像莫名其妙大了 2GB。
+        run: |
+          docker run --rm mcu-rag-qa:ci python -c "
+          import torch
+          v = torch.__version__
+          print('torch 版本:', v)
+          assert '+cpu' in v, (
+              '期望 CPU 版 torch，实际 %s。CUDA 版会白白多占 1.5~2GB，'
+              '而本服务 EMBEDDING_DEVICE=cpu，根本用不到 GPU。' % v
+          )
+          print('镜像内 torch 为 CPU 版 —— Dockerfile 的依赖层改动生效')
+          "
+          # 顺带验证核心依赖在 final 阶段能真正导入成功：
+          # 多阶段构建用的是 --prefix 安装 + COPY --from，路径没配好会在这里暴露。
+          docker run --rm mcu-rag-qa:ci python -c "
+          import fastapi, chromadb, sentence_transformers, jieba
+          print('核心依赖导入 OK —— 多阶段 COPY 的路径正确')
+          "
