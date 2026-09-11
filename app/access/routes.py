@@ -64,6 +64,11 @@ class QAResponse(BaseModel):
     degraded: bool = False
     # 降级原因："" | "llm_error" | "llm_empty"
     degrade_reason: str = ""
+    # 本次问答在 query_logs 中的主键。
+    # 暴露它，客户端才能把反馈**可靠地**关联到这次问答 ——
+    # 此前没有该字段，前端只能取最新一条日志再用问题文本去猜，
+    # 并发时会错配到别人的问答（前端页面上原本自己记着这条限制）。
+    query_log_id: Optional[int] = None
 
 
 class GeneratedAnswer(NamedTuple):
@@ -185,6 +190,7 @@ async def _qa_json(
 
     # 记录查询日志到数据库
     is_degraded = generated.degraded
+    query_log_id: Optional[int] = None
     if db is not None:
         try:
             log = crud.create_query_log(
@@ -194,6 +200,8 @@ async def _qa_json(
                 degraded=is_degraded, injection_blocked=False,
                 llm_used=not is_degraded,
             )
+            # 带回主键：客户端据此把反馈精确关联到本次问答（不再靠猜）
+            query_log_id = log.id
             # 记录来源
             source_dicts = [
                 {"rank": i + 1, "chunk_id": h.chunk_id, "doc_name": h.meta.doc_name,
@@ -212,6 +220,7 @@ async def _qa_json(
         request_id=request_id,
         degraded=generated.degraded,
         degrade_reason=generated.reason,
+        query_log_id=query_log_id,
     )
 
 

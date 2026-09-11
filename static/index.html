@@ -339,11 +339,25 @@ textarea.inp{resize:vertical;min-height:88px;font-family:Consolas,monospace;font
         </table>
       </div>
       <div class="card">
-        <h3>已知契约缺口（前端已绕行，建议后端补齐）</h3>
+        <h3>契约状态（已解决 / 仍待补齐）</h3>
         <table class="tb">
-          <tr><th style="width:210px">缺口</th><th>影响 / 绕行方式</th></tr>
-          <tr><td class="mono">QAResponse 无 query_log_id</td><td>反馈无法直接关联问答。前端绕行：回答后调 <code>/query-logs?limit=1</code> 取最新一条并校验问题文本；并发时会错配，建议后端在 QAResponse 增加该字段。</td></tr>
-          <tr><td class="mono">QAResponse 无链路诊断字段</td><td><code>cache_hit / degraded / llm_used</code> 已写进 query_logs 但不返回给前端，需二次查询才能展示。</td></tr>
+          <tr><th style="width:210px">条目</th><th>状态 / 说明</th></tr>
+          <tr><td class="mono">QAResponse.query_log_id</td>
+              <td><b>已解决</b>。后端已返回该字段；前端用它精确定位本次日志并关联反馈，
+                  不再靠"取最新一条 + 校验问题文本"去猜（那在并发时会错配到别人的问答）。</td></tr>
+          <tr><td class="mono">QAResponse.degraded / degrade_reason</td>
+              <td><b>已解决</b>。<code>degraded</code>（布尔）与 <code>degrade_reason</code>
+                  （<code>llm_error</code> = 调用失败 / <code>llm_empty</code> = 返回空内容）
+                  已随 <code>POST /qa</code> 直接返回；流式回答通过 SSE 注释行
+                  <code>: degraded=&lt;原因&gt;</code> 携带（注释按规范会被客户端忽略，不改变协议）。
+                  页面据此直接显示降级提示。</td></tr>
+          <tr><td class="mono">cache_hit / llm_used 仍需二次查询</td>
+              <td>这两个字段目前只写在 <code>query_logs</code> 里，未随 <code>POST /qa</code> 返回，
+                  所以「链路诊断」仍会发一次 <code>/query-logs</code>。若要一并省掉，可把它们也加进 QAResponse。</td></tr>
+          <tr><td class="mono">流式回答不写查询日志</td>
+              <td><code>_qa_stream</code> 未调用 <code>crud.create_query_log</code>，
+                  因此流式问答不出现在「查询日志」页，也无法提交反馈。
+                  页面现在会明确提示这一点，而不是猜测归属。</td></tr>
           <tr><td class="mono">SourceItem 仅有 score</td><td>分数是 RRF 融合值，无法区分 dense / sparse 贡献，排查检索问题时信息不足。建议增加 <code>dense_score / sparse_score</code>。</td></tr>
           <tr><td class="mono">缺少删除文档接口</td><td>文档页只能查看，无法下线文档（后端 Document 有软删除字段但未暴露）。</td></tr>
         </table>
@@ -588,8 +602,6 @@ $("#base").addEventListener("change", health);
 /* ============================================================
    问答
    ============================================================ */
-let lastLogId = null;
-
 function addMsg(role, html, extra) {
   const el = document.createElement("div");
   el.className = "msg" + (role === "me" ? " me" : "");
@@ -631,7 +643,10 @@ $("#chat").addEventListener("click", e => {
 async function sendFb(btn) {
   const wrap = btn.closest(".acts");
   const type = btn.dataset.t;
-  if (!lastLogId) { alert("未取到 query_log_id，无法提交反馈"); return; }
+  // 从这条回答自己的 .acts 上取 log id。
+  // 不能用全局变量：那样点旧消息的按钮会把反馈记到"最新一次"问答上，污染数据。
+  const logId = wrap ? wrap.dataset.logid : "";
+  if (!logId) { alert("本次回答未关联到查询日志，无法提交反馈"); return; }
   let corrected = "";
   if (type === "correction") {
     corrected = prompt("请输入正确答案：") || "";
@@ -640,21 +655,30 @@ async function sendFb(btn) {
   try {
     await api("/feedback", {
       method: "POST",
-      body: JSON.stringify({ query_log_id: lastLogId, feedback_type: type, corrected_answer: corrected, comment: "" }),
+      body: JSON.stringify({ query_log_id: Number(logId), feedback_type: type, corrected_answer: corrected, comment: "" }),
     });
     wrap.querySelectorAll(".fbBtn").forEach(x => x.classList.remove("on"));
     btn.classList.add("on");
   } catch (e) { alert("反馈失败：" + e.message); }
 }
 
-/* 回答后拉取本次请求的链路诊断（后端未把这些字段放进 QAResponse） */
-async function fetchDiag(question, bubble) {
+/* 回答后展示本次请求的链路诊断。
+   定位方式：用 QAResponse.query_log_id 精确匹配（后端已直接返回该字段），
+   不再拿"问题文本相等"去猜——并发时那会匹配到别人的日志。 */
+async function fetchDiag(bubble, logId) {
+  if (!logId) {
+    bubble.insertAdjacentHTML("beforeend",
+      `<div class="diag"><span class="tag warn">流式回答不写查询日志，本次无法展示链路诊断，也不能提交反馈</span></div>`);
+    return;
+  }
   try {
-    const j = await api("/query-logs?limit=5");
-    const log = (j.logs || []).find(l => (l.question || "") === question.slice(0, 100))
-             || (j.logs || [])[0];
-    if (!log) return;
-    lastLogId = log.id;
+    const j = await api("/query-logs?limit=20");
+    const log = (j.logs || []).find(l => l.id === logId);
+    if (!log) {
+      bubble.insertAdjacentHTML("beforeend",
+        `<div class="diag"><span class="tag warn">未在最近日志中找到 #${logId}</span></div>`);
+      return;
+    }
     const t = [];
     t.push(`<span class="tag">⏱ ${log.elapsed_ms ?? "?"} ms</span>`);
     t.push(`<span class="tag info">来源 ${log.sources_count ?? 0}</span>`);
@@ -662,7 +686,7 @@ async function fetchDiag(question, bubble) {
     if (log.cache_hit) t.push(`<span class="tag warn">缓存命中</span>`);
     if (log.degraded) t.push(`<span class="tag warn">走了降级链路</span>`);
     if (log.injection_blocked) t.push(`<span class="tag bad">注入检测拦截</span>`);
-    const acts = `<div class="acts">
+    const acts = `<div class="acts" data-logid="${log.id}">
       <button class="btn fbBtn" data-t="up">👍 有帮助</button>
       <button class="btn fbBtn" data-t="down">👎 没帮助</button>
       <button class="btn fbBtn" data-t="correction">✏️ 纠正答案</button>
@@ -696,7 +720,7 @@ async function ask() {
       }
       bub.innerHTML = "";
       const rd = r.body.getReader(), dec = new TextDecoder();
-      let buf = "", full = "";
+      let buf = "", full = "", streamDegraded = "";
       for (;;) {
         const { done, value } = await rd.read();
         if (done) break;
@@ -704,7 +728,12 @@ async function ask() {
         const parts = buf.split("\n\n");
         buf = parts.pop();
         for (const p of parts) {
-          const line = p.split("\n").find(x => x.startsWith("data: "));
+          const lines = p.split("\n");
+          const line = lines.find(x => x.startsWith("data: "));
+          // 降级时后端会多发一行 SSE 注释（":" 开头）携带成因。
+          // 按 SSE 规范注释必须被客户端忽略，所以这不改变既有协议。
+          const cmt = lines.find(x => x.startsWith(": degraded="));
+          if (cmt) streamDegraded = cmt.slice(2).trim().replace("degraded=", "");
           if (!line) continue;
           const d = line.slice(6);
           if (d === "[DONE]") continue;
@@ -714,7 +743,13 @@ async function ask() {
         }
       }
       if (!full) bub.innerHTML = '<span style="color:var(--muted)">（空响应）</span>';
-      if ($("#diag").checked) fetchDiag(q, bub);
+      if (streamDegraded) {
+        const label = streamDegraded === "llm_empty" ? "模型返回空内容" : "模型调用失败";
+        bub.insertAdjacentHTML("beforeend",
+          `<div class="diag"><span class="tag warn">走了降级链路（${esc(streamDegraded)} · ${label}）</span></div>`);
+      }
+      // 流式回答后端不写查询日志，故传 null，由 fetchDiag 给出明确说明（不猜测）
+      if ($("#diag").checked) fetchDiag(bub, null);
     } catch (e) {
       bub.innerHTML = `<span style="color:var(--red)">流式请求失败：${esc(e.message)}</span>`;
     }
@@ -733,7 +768,14 @@ async function ask() {
           /未找到|无法回答|暂时无法/.test(j.answer || "") ? '<span class="tag warn">命中兜底文案</span>' : ""
         }</div>`);
     }
-    if ($("#diag").checked) fetchDiag(q, bub);
+    // 降级标识已由 POST /qa 直接返回，不必再发一次请求去推断
+    if (j.degraded) {
+      const reason = j.degrade_reason === "llm_empty" ? "模型返回空内容" : "模型调用失败";
+      bub.insertAdjacentHTML("beforeend",
+        `<div class="diag"><span class="tag warn">走了降级链路（${esc(j.degrade_reason || "未知")} · ${reason}）</span></div>`);
+    }
+    // 用后端返回的 query_log_id 精确定位本次日志（并发下也不会错配）
+    if ($("#diag").checked) fetchDiag(bub, j.query_log_id);
   } catch (e) {
     bub.innerHTML = `<span style="color:var(--red)">请求失败：${esc(e.message)}</span>`;
   }
@@ -748,7 +790,7 @@ $("#q").addEventListener("input", function () {
   this.style.height = Math.min(this.scrollHeight, 180) + "px";
 });
 $("#topk").addEventListener("input", e => $("#topkv").textContent = e.target.value);
-$("#clear").onclick = () => { $("#chat").innerHTML = ""; lastLogId = null; };
+$("#clear").onclick = () => { $("#chat").innerHTML = ""; };
 
 /* ============================================================
    文档库
