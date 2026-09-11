@@ -17,6 +17,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 先拷 requirements，利用 Docker 缓存
 COPY requirements.txt .
+
+# 先单独装 CPU 版 torch —— 必须排在 requirements 之前。
+# Linux 上 PyPI 的 torch 默认是 CUDA 构建（wheel 529MB），并会额外拉
+# nvidia-cudnn / nccl / cusparselt / nvshmem 共 4 个包，合计 1.5~2GB+，
+# 而本服务配置是 EMBEDDING_DEVICE=cpu，根本用不到 GPU，纯属白占体积。
+# 先装 CPU 版把依赖提前满足，后面 pip 就不会再拉 CUDA 版。
+# 该命令已在 CI（Linux + Python 3.11）实测通过；本镜像同为 Debian 系、同 Python 版本。
+RUN pip install --no-cache-dir --prefix=/install \
+    torch --index-url https://download.pytorch.org/whl/cpu
+
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 # ============================================================
