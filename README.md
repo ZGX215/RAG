@@ -183,8 +183,9 @@ alembic check                               # 检查模型与库是否已漂移
 
 诚实说明当前尚未完成 / 有意未做的部分：
 
-- **测试覆盖 60%**：`access/routes.py` 等模块仍偏低，未覆盖的主要是需要重依赖
-  （ChromaDB / 模型）的分支
+- **测试覆盖 73%**：CI 门禁设在 70%。仍有两个模块为 0% ——
+  `ingest/tasks.py`（Celery 异步任务，需 Redis + worker 才能跑）与
+  `retrieve/reranker.py`（重排，未接入当前检索链路）
 - **前端无自动化测试**：934 行的单文件 SPA 目前靠人工与连接冒烟脚本验证
 - **Redis 为可选依赖**：未启动时答案缓存自动降级为进程内 L1，功能可用但重启即失效
 - **限流为单进程内存实现**：多副本部署需改为 Redis 计数，否则实际配额会被放大到
@@ -196,7 +197,7 @@ alembic check                               # 检查模型与库是否已漂移
 ```
 app/            应用代码（ingest / index / retrieve / generate / access / cross / db）
 config/         分层配置
-tests/          自动化测试（212 用例）
+tests/          自动化测试（231 用例，覆盖率 73%）
 scripts/        运维与验证脚本（其余一次性脚本归档于 scripts/legacy/）
 static/         前端（单文件 SPA）
 data/           运行时数据：chroma_db / models / raw_docs（样本手册）

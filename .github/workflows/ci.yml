@@ -81,14 +81,15 @@ jobs:
         run: ruff check .
 
       - name: 运行测试与覆盖率门禁
-        # 覆盖率地板：Windows 本机实测 59%，先设 55% 留出平台差异余量。
-        # 阶段 C 补完 index/generate/access 的测试后，应把这个数字往上抬（目标 70%+）。
-        # 门禁的作用不是"提高覆盖率"，而是防止已经拿到的覆盖率被悄悄改回去。
+        # 覆盖率地板：Windows 本机实测 73%（本轮新增运维/计时的测试后从 60% 提升），
+        # 设 70% 留出平台差异余量。
+        # 门禁的作用不是"提高覆盖率"，而是防止已经拿到的覆盖率被悄悄改回去 ——
+        # 每补一批测试就应把地板跟着抬一次，否则门禁形同虚设。
         run: |
           pytest tests/ -q \
             --cov=app --cov=config \
             --cov-report=term-missing \
-            --cov-fail-under=55
+            --cov-fail-under=70
 
   docker-build:
     name: Docker 镜像构建验证
