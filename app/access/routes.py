@@ -7,6 +7,7 @@ P3 改造：POST /ingest 改为异步（Celery 后台处理），不阻塞问答
 
 from __future__ import annotations
 
+import time
 from typing import Any, NamedTuple, Optional
 
 from celery.result import AsyncResult
@@ -69,6 +70,17 @@ class QAResponse(BaseModel):
     # 此前没有该字段，前端只能取最新一条日志再用问题文本去猜，
     # 并发时会错配到别人的问答（前端页面上原本自己记着这条限制）。
     query_log_id: Optional[int] = None
+    # 端到端耗时（毫秒），从请求进入 qa() 起到生成结果止。
+    # 此前写查询日志时硬编码 elapsed_ms=0，导致 /query-logs 返回的耗时永远是 0、
+    # 前端只能显示"?"，也拿不到可信的性能数据。现改为实测。
+    elapsed_ms: int = 0
+    # 是否为答案缓存命中（命中时跳过检索与 LLM 生成，耗时通常低一个数量级）。
+    cache_hit: bool = False
+    # 分阶段耗时拆解。端到端耗时里绝大部分是外部 LLM API 的网络与推理时间，
+    # 检索（本地向量库 + BM25 + RRF 融合 + 重排）通常远小于它。
+    # 不做拆解就只有一个大数字，无法判断瓶颈在本地还是在外部依赖。
+    retrieval_ms: int = 0
+    generate_ms: int = 0
 
 
 class GeneratedAnswer(NamedTuple):
@@ -131,6 +143,13 @@ class BatchIngestResponse(BaseModel):
 # ============================================================
 
 
+def _elapsed_ms(started_at: float | None) -> int:
+    """请求入口至当前的毫秒数；调用方未计时（None）时返回 0。"""
+    if started_at is None:
+        return 0
+    return int((time.perf_counter() - started_at) * 1000)
+
+
 async def _qa_json(
     question: str,
     top_k: int,
@@ -140,6 +159,7 @@ async def _qa_json(
     tenant: str,
     clearance: str,
     db: Session | None = None,
+    started_at: float | None = None,
 ) -> QAResponse:
     """非流式问答：完整生成后返回 JSON。"""
     from app.generate.fallback_provider import FallbackProvider
@@ -157,7 +177,9 @@ async def _qa_json(
         logger.warning("fallback rule match failed: %s", e)
 
     # 降级链路 2：检索
+    t_retrieval = time.perf_counter()
     hits = await _retrieve(question, top_k, meta_filter, request_id)
+    retrieval_ms = _elapsed_ms(t_retrieval)
     # 最低分数过滤：RRF 分数低于 0.01 说明匹配度很差，不返回
     hits = [h for h in hits if h.final_score > 0.01]
     if not hits:
@@ -172,7 +194,9 @@ async def _qa_json(
         )
 
     # 降级链路 3：LLM 生成
+    t_generate = time.perf_counter()
     generated = await _llm_generate(question, hits, request_id, fallback_provider)
+    generate_ms = _elapsed_ms(t_generate)
     answer = generated.text
 
     # 缓存（仅缓存 LLM 正常作答的结果，不缓存降级内容）
@@ -190,13 +214,16 @@ async def _qa_json(
 
     # 记录查询日志到数据库
     is_degraded = generated.degraded
+    elapsed_ms = _elapsed_ms(started_at)
     query_log_id: Optional[int] = None
     if db is not None:
         try:
             log = crud.create_query_log(
                 db=db, trace_id=request_id, tenant_id=tenant, user_clearance=clearance,
                 question=question, top_k=top_k, sources_count=len(sources),
-                answer_preview=answer, elapsed_ms=0, cache_hit=False,
+                answer_preview=answer, elapsed_ms=elapsed_ms,
+                # 走到这里说明缓存未命中（命中会在 qa() 中提前返回并单独记日志）
+                cache_hit=False,
                 degraded=is_degraded, injection_blocked=False,
                 llm_used=not is_degraded,
             )
@@ -221,6 +248,10 @@ async def _qa_json(
         degraded=generated.degraded,
         degrade_reason=generated.reason,
         query_log_id=query_log_id,
+        elapsed_ms=elapsed_ms,
+        cache_hit=False,
+        retrieval_ms=retrieval_ms,
+        generate_ms=generate_ms,
     )
 
 
@@ -497,6 +528,8 @@ async def qa(req: QARequest, request: Request, db: Session = Depends(get_db)):
     """问答：接收问题，返回答案 + 来源引用。"""
     ctx = get_current_context()
     request_id = ctx.request_id if ctx else ""
+    # 端到端计时起点：放在最前，使耗时覆盖鉴权、缓存查询、检索与生成。
+    t0 = time.perf_counter()
 
     logger.info("qa request: question=%s top_k=%d stream=%s", req.question[:50], req.top_k, req.stream)
 
@@ -537,6 +570,21 @@ async def qa(req: QARequest, request: Request, db: Session = Depends(get_db)):
         if cached_answer:
             logger.info("qa answer cache hit: request_id=%s", request_id)
             metrics.cache_hits_total.labels(namespace="answer").inc()
+            elapsed_ms = _elapsed_ms(t0)
+            # 缓存命中同样要记日志：原先该分支直接返回、完全不写 query_logs，
+            # 导致"命中缓存"的请求在日志与统计里凭空消失（请求数 ≠ 日志数），
+            # 也就无法据此衡量缓存的实际收益。
+            if db is not None:
+                try:
+                    crud.create_query_log(
+                        db=db, trace_id=request_id, tenant_id=tenant, user_clearance=clearance,
+                        question=req.question, top_k=req.top_k, sources_count=0,
+                        answer_preview=cached_answer, elapsed_ms=elapsed_ms,
+                        cache_hit=True, degraded=False, injection_blocked=False,
+                        llm_used=False,
+                    )
+                except Exception as e:
+                    logger.warning("query log write failed (cache hit): %s", e)
             if req.stream:
                 async def stream_cached():
                     yield f"data: {cached_answer}\n\n"
@@ -554,6 +602,8 @@ async def qa(req: QARequest, request: Request, db: Session = Depends(get_db)):
                 answer=cached_answer,
                 sources=[],
                 request_id=request_id,
+                elapsed_ms=elapsed_ms,
+                cache_hit=True,
             )
     except Exception as e:
         logger.warning("cache read failed, skipping: %s", e)
@@ -579,6 +629,7 @@ async def qa(req: QARequest, request: Request, db: Session = Depends(get_db)):
         tenant=tenant,
         clearance=clearance,
         db=db,
+        started_at=t0,
     )
 
 

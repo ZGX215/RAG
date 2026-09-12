@@ -32,6 +32,16 @@ init_db()
 
 # 预热：在后台线程中发送第一个请求，加载所有模型
 def _warmup():
+    """预热：发一个会走完整链路（检索 + 生成）的请求，让 embedding 模型
+    首次推理、BM25 索引构建、向量库连接都提前完成。
+
+    有两个坑会导致预热形同虚设，这里都已避开：
+      1. 问题必须能真正触发检索。原先用的是"你好"，它会命中兜底规则直接返回，
+         根本不进检索链路 —— 于是第一个真实请求仍要独自承担数秒冷启动
+         （实测检索段 p90 高达 5.8s，而稳态仅 80ms）。
+      2. 不再发送 X-User-Clearance 请求头 —— 该头已废弃，鉴权改由服务端
+         签发的 token 决定，发它不会带来任何权限，反而容易让人误以为生效。
+    """
     import logging
     import time
 
@@ -41,9 +51,8 @@ def _warmup():
     try:
         r = requests.post(
             f"http://localhost:{settings.api.port}/api/v1/qa",
-            json={"question": "你好", "top_k": 1},
-            headers={"X-User-Clearance": "public"},
-            timeout=120,
+            json={"question": "STM32F103 的系统时钟频率", "top_k": 3},
+            timeout=300,
         )
         logging.getLogger("mcu-rag-qa").info("warmup done: status=%s", r.status_code)
     except Exception as e:
