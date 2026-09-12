@@ -10,7 +10,7 @@ from celery import Celery
 from config.settings import settings
 
 celery_app = Celery(
-    "mcu_rag_qa",
+    "enterprise_rag",
     broker=settings.celery.broker_url,
     backend=settings.celery.result_backend,
 )

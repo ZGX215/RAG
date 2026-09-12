@@ -66,7 +66,7 @@ def main():
         st, body, hdr = http("GET", HOST + "/", timeout=20)
         text = body.decode("utf-8", "replace")
         rec("GET / 返回 200", st == 200, f"status={st} content-type={hdr.get('Content-Type')}")
-        rec("返回的是前端页面", ("MCU RAG QA" in text) or ("<script>" in text and "问答" in text),
+        rec("返回的是前端页面", ("企业级 RAG" in text) or ("<script>" in text and "问答" in text),
             f"{len(body)} bytes")
         # 顺便确认本次前端改动已经生效（服务的是磁盘上的最新文件）
         rec("页面含本轮修复(query_log_id 精确关联)", "data-logid" in text and "query_log_id" in text)

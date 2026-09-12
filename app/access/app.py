@@ -115,8 +115,8 @@ async def lifespan(_app: FastAPI):
 
 # 创建 FastAPI app
 app = FastAPI(
-    title="MCU RAG QA API",
-    description="RAG 问答 API，基于企业知识库文档",
+    title="企业级 RAG 知识库问答 API",
+    description="检索增强生成（RAG）问答服务：多格式入库、双重检索、密级权限过滤、多级降级",
     version="0.1.0",
     lifespan=lifespan,
 )

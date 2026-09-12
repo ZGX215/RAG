@@ -15,7 +15,7 @@ from pathlib import Path
 def setup_logging(
     log_dir: str = "./data/logs",
     log_level: str = "INFO",
-    app_name: str = "mcu-rag-qa",
+    app_name: str = "enterprise-rag",
 ) -> logging.Logger:
     """初始化应用日志。
 
@@ -69,4 +69,4 @@ def get_logger(name: str) -> logging.Logger:
         logger = get_logger(__name__)
         logger.info("embedding %d texts", len(texts))
     """
-    return logging.getLogger(f"mcu-rag-qa.{name}")
+    return logging.getLogger(f"enterprise-rag.{name}")

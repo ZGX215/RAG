@@ -119,7 +119,7 @@ jobs:
           context: .
           push: false
           load: true
-          tags: mcu-rag-qa:ci
+          tags: enterprise-rag:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -129,7 +129,7 @@ jobs:
         # 若哪天有人把 CPU 版 torch 那行删了，这个断言会立刻失败，
         # 而不是等到某次 docker build 后才发现镜像莫名其妙大了 2GB。
         run: |
-          docker run --rm mcu-rag-qa:ci python -c "
+          docker run --rm enterprise-rag:ci python -c "
           import torch
           v = torch.__version__
           print('torch 版本:', v)
@@ -141,7 +141,7 @@ jobs:
           "
           # 顺带验证核心依赖在 final 阶段能真正导入成功：
           # 多阶段构建用的是 --prefix 安装 + COPY --from，路径没配好会在这里暴露。
-          docker run --rm mcu-rag-qa:ci python -c "
+          docker run --rm enterprise-rag:ci python -c "
           import fastapi, chromadb, sentence_transformers, jieba
           print('核心依赖导入 OK —— 多阶段 COPY 的路径正确')
           "

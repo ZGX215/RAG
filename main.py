@@ -54,9 +54,9 @@ def _warmup():
             json={"question": "STM32F103 的系统时钟频率", "top_k": 3},
             timeout=300,
         )
-        logging.getLogger("mcu-rag-qa").info("warmup done: status=%s", r.status_code)
+        logging.getLogger("enterprise-rag").info("warmup done: status=%s", r.status_code)
     except Exception as e:
-        logging.getLogger("mcu-rag-qa").warning("warmup failed: %s", e)
+        logging.getLogger("enterprise-rag").warning("warmup failed: %s", e)
 
 warmup_thread = threading.Thread(target=_warmup, daemon=True)
 warmup_thread.start()
