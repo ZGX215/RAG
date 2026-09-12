@@ -59,11 +59,17 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      # 指向 readiness 而非 /health：/health 现在始终返回 200（只供人工排查），
+      # 拿它当编排探针会让"依赖已挂但仍返回 200"的实例继续接收流量。
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s  # 首次启动模型加载慢，给 60 秒
+    # 优雅关闭：docker stop 先发 SIGTERM，留时间给应用释放模型、向量库句柄、
+    # 数据库连接池；超时才 SIGKILL。该值必须大于应用实际清理耗时，
+    # 否则会表现为"偶发被强杀"、日志里看不到 shutdown complete。
+    stop_grace_period: 30s
 
   # ----------------------------------------------------------
   # Worker：Celery 异步入库

@@ -133,6 +133,12 @@ class ApiSettings(BaseSettings):
     cors_origins: list[str] = Field(
         default=["http://localhost:3000"], alias="API_CORS_ORIGINS"
     )
+    # 接口限流：每个身份（已登录按用户 uid、未登录按客户端 IP）在窗口内的
+    # 最大请求数。设为 0 表示关闭限流。
+    # 注意：当前为单进程内存实现，多副本部署需改为 Redis 计数，否则实际配额
+    # 会被放大到「副本数 × 阈值」（详见 app/access/ratelimit.py 的说明）。
+    rate_limit_per_minute: int = Field(default=60, alias="API_RATE_LIMIT_PER_MINUTE")
+    rate_limit_window_seconds: int = Field(default=60, alias="API_RATE_LIMIT_WINDOW")
 
 
 class CelerySettings(BaseSettings):
