@@ -1,4 +1,4 @@
-"""ORM 模型定义 — 7 张企业级表。
+"""ORM 模型定义 — 8 张企业级表。
 
 表关系：
   documents 1───n chunks
@@ -6,6 +6,7 @@
   query_logs 1───n query_sources
   query_logs 1───n user_feedback
   query_logs 1───1 evaluation_results
+  users（独立表：账号即密级来源）
 
 设计原则：
   - 主键用 BIGINT AUTOINCREMENT（PostgreSQL 迁移无碍）

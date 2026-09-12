@@ -566,7 +566,6 @@ function md(src) {
 
 /* ---------- 视图切换 ---------- */
 const TITLES = { chat:"问答", docs:"文档库", ingest:"入库", logs:"查询日志", fb:"反馈", about:"接口与设置" };
-const LOADED = {};
 $("#nav").addEventListener("click", e => {
   const b = e.target.closest("button[data-v]");
   if (!b) return;
